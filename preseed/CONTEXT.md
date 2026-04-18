@@ -159,6 +159,7 @@ fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
    - **docker-ce** из upstream-репо (`download.docker.com`) + plugins buildx/compose, `usermod -aG docker user`
    - **google-chrome-stable** из `dl.google.com/linux/chrome/deb/`
    - **JetBrainsMono Nerd Font** с `github.com/ryanoasis/nerd-fonts/releases/latest` → `/usr/local/share/fonts/JetBrainsMono-Nerd/` + `fc-cache -f`
+   - **git clone `github.com/hr82al/my_os.git`** в `/home/user/mr/workspace/my_os/` (с `chown user:user`), чтобы bootstrap.sh был сразу доступен после первой загрузки
    - `snapper -c root create-config /` и `snapper -c data create-config /data`
 3. **`pkgsel/include`** — полный список зафиксирован (см. выше). `tasksel standard` (НЕ desktop).
 4. **GRUB**, локаль, сеть, аккаунты — раньше.

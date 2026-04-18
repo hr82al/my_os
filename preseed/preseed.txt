@@ -613,6 +613,11 @@ d-i preseed/late_command string \
       'in-target rm /tmp/nf_ver /tmp/JBM.tar.xz' \
       'in-target fc-cache -f' \
       '' \
+      '# Clone my_os repo into user home — bootstrap.sh ready after first boot' \
+      'mkdir -p /target/home/user/mr/workspace' \
+      'in-target chown -R user:user /home/user/mr' \
+      'in-target sudo -u user git clone https://github.com/hr82al/my_os.git /home/user/mr/workspace/my_os' \
+      '' \
       '# Snapper configs (no-op if snapper is not installed via pkgsel/include)' \
       'if in-target sh -c "command -v snapper >/dev/null 2>&1"; then' \
       '    in-target snapper -c root create-config /' \
