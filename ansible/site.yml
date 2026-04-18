@@ -105,6 +105,40 @@
       tags: [obsidian]
 
     # -----------------------------------------------------------------------
+    # chezmoi — dotfiles manager; latest .deb from GitHub releases
+    # (not in Debian main, so it can't go in preseed pkgsel/include)
+    # -----------------------------------------------------------------------
+    - name: chezmoi | query latest release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/twpayne/chezmoi/releases/latest
+        return_content: true
+      register: chezmoi_release
+      tags: [chezmoi]
+
+    - name: chezmoi | resolve amd64 .deb URL
+      ansible.builtin.set_fact:
+        chezmoi_deb_url: >-
+          {{
+            chezmoi_release.json.assets
+            | selectattr('name', 'match', 'chezmoi_.*_linux_amd64\.deb$')
+            | map(attribute='browser_download_url')
+            | first
+          }}
+      tags: [chezmoi]
+
+    - name: chezmoi | download .deb
+      ansible.builtin.get_url:
+        url: "{{ chezmoi_deb_url }}"
+        dest: /tmp/chezmoi.deb
+        mode: "0644"
+      tags: [chezmoi]
+
+    - name: chezmoi | install
+      ansible.builtin.apt:
+        deb: /tmp/chezmoi.deb
+      tags: [chezmoi]
+
+    # -----------------------------------------------------------------------
     # Bruno — latest .deb from GitHub releases
     # -----------------------------------------------------------------------
     - name: Bruno | query latest release
@@ -262,6 +296,7 @@
       loop:
         - /tmp/dbeaver-ce.deb
         - /tmp/obsidian.deb
+        - /tmp/chezmoi.deb
         - /tmp/bruno.deb
         - /tmp/throne.deb
         - /tmp/postman.tar.gz

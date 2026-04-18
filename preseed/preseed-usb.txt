@@ -420,9 +420,9 @@ tasksel tasksel/first multiselect standard
 #   browser:  firefox-esr  (google-chrome installed via late_command)
 #   net:      network-manager network-manager-gnome
 #   audio:    pipewire pipewire-pulse wireplumber
-#   misc:     policykit-1 acpid tlp plymouth plymouth-themes
+#   misc:     polkitd acpid tlp plymouth plymouth-themes  (policykit-1 removed in trixie)
 #   tools:    tmux rsync ncdu iotop iftop tree jq pv bash-completion rclone privoxy bubblewrap
-#   config-mgmt: ansible chezmoi
+#   config-mgmt: ansible  (chezmoi installed from github via ansible, not in Debian main)
 #   fonts:    fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 #             (JetBrainsMono Nerd Font installed via late_command)
 # docker-ce is NOT here — installed from upstream repo via late_command.
@@ -435,12 +435,12 @@ d-i pkgsel/include string \
   firefox-esr \
   network-manager network-manager-gnome \
   pipewire pipewire-pulse wireplumber \
-  policykit-1 acpid tlp plymouth plymouth-themes \
+  polkitd acpid tlp plymouth plymouth-themes \
   tmux rsync ncdu iotop iftop tree jq pv bash-completion \
   rclone privoxy bubblewrap \
   preload zram-tools \
   efibootmgr \
-  ansible chezmoi \
+  ansible \
   fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 
 # Apply security/stable updates right after debootstrap
