@@ -24,11 +24,16 @@
 
 ### 1. Установка ОС (один раз перед первой загрузкой)
 
-Готовая Ventoy-флешка со встроенным preseed (процедура в
-[`preseed/CONTEXT.md`](preseed/CONTEXT.md)):
+Два варианта preseed — выбор в меню Ventoy через picker:
 
+| Файл | Куда ставит | Разметка |
+|---|---|---|
+| [`preseed/preseed.txt`](preseed/preseed.txt) | внутренний NVMe `/dev/nvme0n1` | LVM + btrfs + /data + snapper |
+| [`preseed/preseed-usb.txt`](preseed/preseed-usb.txt) | внешний USB SSD (by-id) | ext4 single root + tmpfs/sysctl/zram оптимизации |
+
+Шаги:
 - BIOS → Boot menu → USB (Ventoy)
-- «Debian 13 (auto-install via preseed)» → автоустановка
+- «Debian 13 (auto-install via preseed)» → Ventoy picker → выбрать вариант preseed
 - После ребута: логин `user` / `changeme` (поменяйте сразу)
 
 Проверочный чек-лист и диагностика проблем — в

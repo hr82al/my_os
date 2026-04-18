@@ -1,0 +1,18 @@
+# Claude Code per-project state (permissions, settings) — machine-specific
+.claude/
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Downloaded artifacts used during preseed/ansible development
+# (kept as local scratch, do not commit)
+*.iso
+*.tar.gz
+*.tar.xz
+*.deb

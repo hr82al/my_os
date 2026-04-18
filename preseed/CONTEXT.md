@@ -17,7 +17,8 @@
 - `bootstrap.sh` — исполняемый, оркестратор: `./bootstrap.sh [all|ansible|dotfiles|user-tools]`. Запускается на свежей Debian после preseed.
 
 ### `preseed/`
-- `preseed.txt` — основной файл (правится по ходу)
+- `preseed.txt` — **основной** (установка на внутренний NVMe `/dev/nvme0n1`, LVM+btrfs+snapper)
+- `preseed-usb.txt` — **вариант для внешнего USB SSD** (см. ниже раздел)
 - `example-preseed.txt` — оригинал из Debian (справочник, не трогать)
 - `find-fastest-mirror.sh` — bash-скрипт бенчмарка официальных зеркал Debian (создан, исполняемый)
 - `CONTEXT.md` — этот файл
@@ -205,12 +206,59 @@ fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 
 8. **Перенос PG-volumes** со старой системы — через `pg_dump` всех БД перед установкой, restore после. Либо копирование каталогов `/var/lib/docker/volumes/<vol>/_data/` (с остановленными контейнерами). Стратегия обсудить отдельно.
 
-9. **Обновить Ventoy-флешку** — на ней лежит preseed.txt версии ДО добавления rclone/privoxy. Нужно перед физическим install:
+9. **Обновить Ventoy-флешку** — на ней лежит preseed.txt версии ДО добавления rclone/privoxy/git-clone, и **нет preseed-usb.txt**. Нужно перед физическим install:
    ```bash
    udisksctl mount -b /dev/sdb1
-   cp /home/user/mr/workspace/my_os/preseed/preseed.txt /run/media/user/Ventoy/preseed.txt
+   cp /home/user/mr/workspace/my_os/preseed/preseed.txt     /run/media/user/Ventoy/preseed.txt
+   cp /home/user/mr/workspace/my_os/preseed/preseed-usb.txt /run/media/user/Ventoy/preseed-usb.txt
+   # Обновить ventoy.json — добавить оба template
    sync && udisksctl unmount -b /dev/sdb1 && udisksctl power-off -b /dev/sdb
    ```
+   **ventoy.json** должен иметь массив в `template`, чтобы Ventoy показал picker:
+   ```json
+   "auto_install": [
+       {
+           "image": "/debian-13.4.0-amd64-DVD-1.iso",
+           "template": [
+               "/preseed.txt",
+               "/preseed-usb.txt"
+           ]
+       }
+   ]
+   ```
+
+---
+
+## 🧰 preseed-usb.txt — вариант для внешнего USB SSD
+
+**Зачем:** Установка на внешний USB SSD как «основная рабочая система», текущая Fedora на внутреннем NVMe остаётся как fallback. Внутренний диск **не трогаем** (адресация по `/dev/disk/by-id/usb-Wodposit_NVMe_SSD_152D05830E2B-0:0`).
+
+**Диск:** Wodposit NVMe SSD в USB 3.2 Gen 2 enclosure (JMicron JMS583), 238.5 GiB, линк 10 Gbps (~1 GB/s).
+
+**Разметка (простая, надёжная):**
+```
+/dev/disk/by-id/usb-Wodposit... (238.5 GiB)
+├─ p1  ESP FAT32   512 MiB  (/boot/efi)
+├─ p2  /boot ext4    2 GiB
+└─ p3  / ext4      ~235 GiB  options: noatime,nodiratime,commit=60
+```
+Без LVM, без btrfs, без swap, без `/data`. Всё (включая docker volumes, PG, images) живёт в одном корне.
+
+**Оптимизации (USB компенсация) — всё в late_command:**
+- `/tmp` на tmpfs 8 GiB (все temp-файлы в RAM)
+- `/etc/sysctl.d/99-usb-ssd-cache.conf` — aggressive page-cache, dirty ratio 10/30, writeback 15s/60s
+- `/etc/udev/rules.d/60-usb-readahead.rules` — readahead 2048 KB (8× default) для всех USB block devices
+- `zram-tools` — compressed in-memory swap (zstd, 25% RAM, priority 100) — чистый RAM, диск не пишет
+- `preload` — предсказательный загрузчик часто используемых файлов в page cache
+
+**Docker/Chrome/Nerd Font/git clone** — так же как в основном preseed, без изменений.
+
+**НЕТ в preseed-usb.txt:**
+- `snapper` (требует btrfs)
+- `/data` и `/var/lib/docker` на отдельных LV (нет LVM)
+- `lv-swap` (swap на USB вредно)
+
+**Рассмотренная, но отвергнутая оптимизация:** bcache/dm-cache с внутренним NVMe в качестве кэша. Требовало бы тронуть fallback-диск — риск неприемлемый для сценария «fallback должен оставаться нетронутым».
 
 ---
 
