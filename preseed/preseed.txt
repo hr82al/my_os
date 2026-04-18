@@ -432,7 +432,7 @@ tasksel tasksel/first multiselect standard
 #   net:      network-manager network-manager-gnome
 #   audio:    pipewire pipewire-pulse wireplumber
 #   misc:     policykit-1 acpid tlp plymouth plymouth-themes
-#   tools:    tmux rsync ncdu iotop iftop tree jq pv bash-completion rclone privoxy
+#   tools:    tmux rsync ncdu iotop iftop tree jq pv bash-completion rclone privoxy bubblewrap
 #   config-mgmt: ansible chezmoi
 #   fonts:    fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 #             (JetBrainsMono Nerd Font installed via late_command)
@@ -448,7 +448,7 @@ d-i pkgsel/include string \
   pipewire pipewire-pulse wireplumber \
   policykit-1 acpid tlp plymouth plymouth-themes \
   tmux rsync ncdu iotop iftop tree jq pv bash-completion \
-  rclone privoxy \
+  rclone privoxy bubblewrap \
   ansible chezmoi \
   fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 
