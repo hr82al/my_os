@@ -110,7 +110,9 @@ d-i hw-detect/load_firmware boolean true
 # Default value for the mirror protocol: http.
 #d-i mirror/protocol string ftp
 d-i mirror/country string manual
-d-i mirror/http/hostname string deb.debian.org
+# Fastest mirror from find-fastest-mirror.sh benchmark (Moscow, RU).
+# Fallback mirror deb.debian.org added in late_command as sources.list.d/fallback.list.
+d-i mirror/http/hostname string mirror.mephi.ru
 d-i mirror/http/directory string /debian
 d-i mirror/http/proxy string
 
@@ -558,6 +560,13 @@ d-i preseed/late_command string \
       '#!/bin/sh' \
       'set -eux' \
       'exec >/target/var/log/late-install.log 2>&1' \
+      '' \
+      '# --- Fallback apt mirror (deb.debian.org) — kicks in if primary' \
+      '#     mirror.mephi.ru goes down. apt tries both sources. ---' \
+      'cat > /target/etc/apt/sources.list.d/fallback.list <<FB_EOF' \
+      'deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware' \
+      'deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware' \
+      'FB_EOF' \
       '' \
       '# --- /tmp on tmpfs (8 GiB cap, RAM-backed) ---' \
       'echo "tmpfs  /tmp  tmpfs  defaults,noatime,nosuid,size=8G,mode=1777  0 0" >> /target/etc/fstab' \

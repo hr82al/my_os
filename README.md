@@ -73,7 +73,9 @@ my_os/
 ├── README.md                ← вы здесь
 ├── bootstrap.sh             ← one-button restore (ansible + chezmoi + user-tools)
 ├── preseed/
-│   ├── preseed.txt          ← основной preseed-файл
+│   ├── preseed.txt          ← preseed для внутреннего NVMe (LVM+btrfs)
+│   ├── preseed-usb.txt      ← preseed для внешнего USB SSD (ext4, USB-оптимизации)
+│   ├── ventoy.json          ← master-конфиг Ventoy (picker для двух preseed)
 │   ├── CONTEXT.md           ← полный контекст проекта (решения + следующий шаг)
 │   ├── POST-INSTALL.md      ← чек-лист проверки и диагностика проблем
 │   ├── find-fastest-mirror.sh

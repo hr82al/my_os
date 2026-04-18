@@ -1,0 +1,20 @@
+{
+    "control": [
+        { "VTOY_LINUX_REMOUNT": "1" }
+    ],
+    "menu_alias": [
+        {
+            "image": "/debian-13.4.0-amd64-DVD-1.iso",
+            "alias": "Debian 13 (auto-install, pick preseed)"
+        }
+    ],
+    "auto_install": [
+        {
+            "image": "/debian-13.4.0-amd64-DVD-1.iso",
+            "template": [
+                "/preseed.txt",
+                "/preseed-usb.txt"
+            ]
+        }
+    ]
+}

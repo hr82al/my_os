@@ -19,6 +19,7 @@
 ### `preseed/`
 - `preseed.txt` — **основной** (установка на внутренний NVMe `/dev/nvme0n1`, LVM+btrfs+snapper)
 - `preseed-usb.txt` — **вариант для внешнего USB SSD** (см. ниже раздел)
+- `ventoy.json` — конфиг Ventoy (master-копия, копируется на флешку в `/ventoy/ventoy.json`). Массив `template` → picker-меню выбора между двумя preseed.
 - `example-preseed.txt` — оригинал из Debian (справочник, не трогать)
 - `find-fastest-mirror.sh` — bash-скрипт бенчмарка официальных зеркал Debian (создан, исполняемый)
 - `CONTEXT.md` — этот файл
@@ -77,8 +78,9 @@ RAM:  32 GiB
 
 ### Зеркало (уже в preseed.txt)
 
-- Дефолт: `deb.debian.org`
-- Скрипт `find-fastest-mirror.sh` для выбора лучшего (запустить отдельно, заменить в preseed)
+- **Основное:** `mirror.mephi.ru` (Moscow, 7 MB/s, ping 2 мс — по бенчмарку `find-fastest-mirror.sh`, 2026-04-18)
+- **Fallback:** `deb.debian.org` добавляется в `/etc/apt/sources.list.d/fallback.list` через late_command. Если mephi ляжет, apt подхватит пакеты оттуда.
+- **Security:** всегда `security.debian.org` (конвенция Debian, не меняется)
 
 ### GRUB (уже в preseed.txt)
 
@@ -206,26 +208,20 @@ fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 
 8. **Перенос PG-volumes** со старой системы — через `pg_dump` всех БД перед установкой, restore после. Либо копирование каталогов `/var/lib/docker/volumes/<vol>/_data/` (с остановленными контейнерами). Стратегия обсудить отдельно.
 
-9. **Обновить Ventoy-флешку** — на ней лежит preseed.txt версии ДО добавления rclone/privoxy/git-clone, и **нет preseed-usb.txt**. Нужно перед физическим install:
+9. **Обновить Ventoy-флешку** (когда меняется preseed или ventoy.json). Процедура — 3 `cp` + unmount:
    ```bash
-   udisksctl mount -b /dev/sdb1
-   cp /home/user/mr/workspace/my_os/preseed/preseed.txt     /run/media/user/Ventoy/preseed.txt
-   cp /home/user/mr/workspace/my_os/preseed/preseed-usb.txt /run/media/user/Ventoy/preseed-usb.txt
-   # Обновить ventoy.json — добавить оба template
-   sync && udisksctl unmount -b /dev/sdb1 && udisksctl power-off -b /dev/sdb
+   # Определить на каком sdX Ventoy:
+   lsblk -f | grep -iE 'ventoy|VTOY'      # ищем label Ventoy
+   # (обычно /dev/sdb1 если флешка единственная USB, или /dev/sdc1 если подключён ещё внешний SSD)
+   udisksctl mount -b /dev/sdX1
+
+   cp /home/user/mr/workspace/my_os/preseed/preseed.txt      /run/media/$USER/Ventoy/preseed.txt
+   cp /home/user/mr/workspace/my_os/preseed/preseed-usb.txt  /run/media/$USER/Ventoy/preseed-usb.txt
+   cp /home/user/mr/workspace/my_os/preseed/ventoy.json      /run/media/$USER/Ventoy/ventoy/ventoy.json
+
+   sync && udisksctl unmount -b /dev/sdX1 && udisksctl power-off -b /dev/sdX
    ```
-   **ventoy.json** должен иметь массив в `template`, чтобы Ventoy показал picker:
-   ```json
-   "auto_install": [
-       {
-           "image": "/debian-13.4.0-amd64-DVD-1.iso",
-           "template": [
-               "/preseed.txt",
-               "/preseed-usb.txt"
-           ]
-       }
-   ]
-   ```
+   Три файла обновляются, ISO (5 GB) не трогается.
 
 ---
 
