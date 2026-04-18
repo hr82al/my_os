@@ -159,6 +159,8 @@ d-i clock-setup/ntp boolean true
 # and not e.g. /dev/discs/disc0/disc).
 # For example, to use the first SCSI/SATA hard disk:
 #d-i partman-auto/disk string /dev/sda
+# NVMe drive on target machine
+d-i partman-auto/disk string /dev/nvme0n1
 # In addition, you'll need to specify the method to use.
 # The presently available methods are:
 # - regular: use the usual partition types for your architecture
@@ -187,7 +189,58 @@ d-i partman-lvm/confirm_nooverwrite boolean true
 # - multi:  separate /home, /var, and /tmp partitions
 # - server: separate /var and /srv partitions; swap limitted to 1G
 # - small_disk: scheme dedicated to small harddrives (under 10GB)
-d-i partman-auto/choose_recipe select atomic
+d-i partman-auto/choose_recipe select custom
+
+# ---------------------------------------------------------------------------
+# Custom partitioning recipe for 931.5 GiB NVMe /dev/nvme0n1:
+#   p1  ESP FAT32       512 MiB    (/boot/efi)
+#   p2  ext4            2 GiB      (/boot)
+#   p3  LVM PV (vg0)  399 GiB
+#         lv-root  btrfs  100 GiB   (/)        — flat layout (no @-subvolumes);
+#                                                snapper will create /.snapshots itself
+#         lv-docker ext4  220 GiB   (/var/lib/docker)  noatime,nodiratime
+#         lv-swap  swap    16 GiB
+#         (~63 GiB free in VG as hot reserve for lvextend)
+#   p4  (late_command)   ~440 GiB  (btrfs /data, created later)
+#   p5  (late_command)   ~89.5 GiB (reserve for future second OS)
+# Sizes are in MiB. 1 GiB = 1024 MiB.
+# ---------------------------------------------------------------------------
+d-i partman-auto/expert_recipe string                                     \
+      custom ::                                                           \
+              512 512 512 free                                            \
+                      $iflabel{ gpt }                                     \
+                      $reusemethod{ }                                     \
+                      method{ efi }                                       \
+                      format{ }                                           \
+              .                                                           \
+              2048 2048 2048 ext4                                         \
+                      $primary{ } $bootable{ }                            \
+                      method{ format } format{ }                          \
+                      use_filesystem{ } filesystem{ ext4 }                \
+                      mountpoint{ /boot }                                 \
+              .                                                           \
+              408576 408576 408576 ext4                                   \
+                      $primary{ }                                         \
+                      method{ lvm } vg_name{ vg0 }                        \
+              .                                                           \
+              102400 102400 102400 btrfs                                  \
+                      $lvmok{ } in_vg{ vg0 } lv_name{ lv-root }           \
+                      method{ format } format{ }                          \
+                      use_filesystem{ } filesystem{ btrfs }               \
+                      mountpoint{ / }                                     \
+              .                                                           \
+              225280 225280 225280 ext4                                   \
+                      $lvmok{ } in_vg{ vg0 } lv_name{ lv-docker }         \
+                      method{ format } format{ }                          \
+                      use_filesystem{ } filesystem{ ext4 }                \
+                      options/noatime{ noatime }                          \
+                      options/nodiratime{ nodiratime }                    \
+                      mountpoint{ /var/lib/docker }                       \
+              .                                                           \
+              16384 16384 16384 linux-swap                                \
+                      $lvmok{ } in_vg{ vg0 } lv_name{ lv-swap }           \
+                      method{ swap } format{ }                            \
+              .
 
 # Or provide a recipe of your own...
 # If you have a way to get a recipe file into the d-i environment, you can
@@ -243,9 +296,9 @@ d-i partman/confirm_nooverwrite boolean true
 
 # Force UEFI booting ('BIOS compatibility' will be lost). Default: false.
 #d-i partman-efi/non_efi_system boolean true
-# Ensure the partition table is GPT - this is required for EFI
-#d-i partman-partitioning/choose_label select gpt
-#d-i partman-partitioning/default_label string gpt
+# Ensure the partition table is GPT - required for EFI and for our 5-partition layout
+d-i partman-partitioning/choose_label select gpt
+d-i partman-partitioning/default_label string gpt
 
 # When disk encryption is enabled, skip wiping the partitions beforehand.
 #d-i partman-auto-crypto/erase_disks boolean false
@@ -363,17 +416,43 @@ d-i apt-setup/contrib boolean true
 
 
 ### Package selection
-#tasksel tasksel/first multiselect standard, web-server, kde-desktop
+# Standard utilities only — NO desktop task (we install qtile + lightdm manually)
+tasksel tasksel/first multiselect standard
 
-# Or choose to not get the tasksel dialog displayed at all (and don't install
-# any packages):
-#d-i pkgsel/run_tasksel boolean false
+# Individual additional packages to install (space-separated, one line)
+# Categories:
+#   base+ssh: openssh-server sudo ca-certificates
+#   dev:      build-essential git vim htop curl wget less
+#   fs:       btrfs-progs lvm2 snapper
+#   X stack:  xorg xinit lightdm
+#   WM/term:  qtile kitty
+#   browser:  firefox-esr  (google-chrome installed via late_command)
+#   net:      network-manager network-manager-gnome
+#   audio:    pipewire pipewire-pulse wireplumber
+#   misc:     policykit-1 acpid tlp plymouth plymouth-themes
+#   tools:    tmux rsync ncdu iotop iftop tree jq pv bash-completion rclone privoxy
+#   config-mgmt: ansible chezmoi
+#   fonts:    fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
+#             (JetBrainsMono Nerd Font installed via late_command)
+# docker-ce is NOT here — installed from upstream repo via late_command.
+d-i pkgsel/include string \
+  openssh-server sudo ca-certificates \
+  build-essential git vim htop curl wget less \
+  btrfs-progs lvm2 snapper \
+  xorg xinit lightdm \
+  qtile kitty \
+  firefox-esr \
+  network-manager network-manager-gnome \
+  pipewire pipewire-pulse wireplumber \
+  policykit-1 acpid tlp plymouth plymouth-themes \
+  tmux rsync ncdu iotop iftop tree jq pv bash-completion \
+  rclone privoxy \
+  ansible chezmoi \
+  fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 
-# Individual additional packages to install
-#d-i pkgsel/include string openssh-server build-essential
-# Whether to upgrade packages after debootstrap.
+# Apply security/stable updates right after debootstrap
 # Allowed values: none, safe-upgrade, full-upgrade
-#d-i pkgsel/upgrade select none
+d-i pkgsel/upgrade select safe-upgrade
 
 # You can choose, if your system will report back on what software you have
 # installed, and what software you use. The default is not to report back,
@@ -468,5 +547,80 @@ d-i finish-install/reboot_in_progress note
 # still a usable /target directory. You can chroot to /target and use it
 # directly, or use the apt-install and in-target commands to easily install
 # packages and run commands in the target system.
-#d-i preseed/late_command string apt-install zsh; in-target chsh -s /bin/zsh
+# ---------------------------------------------------------------------------
+# late_command: runs after installation is complete but before reboot.
+# Here we:
+#   1. Create p4 (btrfs /data, ~440 GiB) and p5 (reserve for second OS, ~89.5 GiB)
+#   2. mkfs.btrfs on p4 with label=data; mount at /target/data
+#   3. Append /data entry to /target/etc/fstab using LABEL=data
+#   4. Initialise snapper configs for / and /data (if snapper is installed)
+# Approach: inline the whole shell script via `printf '%s\n' ...` into
+# /target/root/late.sh, then execute it. No external files, no heredoc parsing
+# problems (preseed strings can't contain real newlines).
+# Output logged to /target/var/log/late-install.log
+# ---------------------------------------------------------------------------
+d-i preseed/late_command string \
+    printf '%s\n' \
+      '#!/bin/sh' \
+      'set -eux' \
+      'exec >/target/var/log/late-install.log 2>&1' \
+      '' \
+      'DISK=/dev/nvme0n1' \
+      '' \
+      '# Query end of p3 (LVM PV) in MiB, start p4 right after' \
+      'P3_END=$(parted --script --machine --unit MiB "$DISK" print | grep "^3:" | cut -d: -f3 | sed "s/MiB//")' \
+      'P3_END=${P3_END%.*}' \
+      'P4_END=$((P3_END + 440 * 1024))' \
+      '' \
+      'parted --script "$DISK" mkpart data btrfs "${P3_END}MiB" "${P4_END}MiB"' \
+      'parted --script "$DISK" mkpart reserve "${P4_END}MiB" 100%' \
+      'partprobe "$DISK"' \
+      'udevadm settle' \
+      '' \
+      '# Format p4; p5 left raw (future OS installer will format it)' \
+      'mkfs.btrfs -f -L data /dev/nvme0n1p4' \
+      '' \
+      'mkdir -p /target/data' \
+      'mount /dev/nvme0n1p4 /target/data' \
+      '' \
+      '# Persistent mount for /data' \
+      'echo "LABEL=data /data btrfs defaults,noatime,compress=zstd:1,space_cache=v2 0 2" >> /target/etc/fstab' \
+      '' \
+      '# Install Docker CE from upstream repo (not debian docker.io)' \
+      '# Target arch = amd64, Debian 13 codename = trixie' \
+      'in-target apt-get install -y --no-install-recommends ca-certificates curl' \
+      'in-target install -m 0755 -d /etc/apt/keyrings' \
+      'in-target curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc' \
+      'in-target chmod a+r /etc/apt/keyrings/docker.asc' \
+      'echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" > /target/etc/apt/sources.list.d/docker.list' \
+      'in-target apt-get update' \
+      'in-target apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin' \
+      'in-target usermod -aG docker user' \
+      '' \
+      '# Google Chrome from upstream repo' \
+      'in-target curl -fsSL https://dl.google.com/linux/linux_signing_key.pub -o /etc/apt/keyrings/google-chrome.asc' \
+      'in-target chmod a+r /etc/apt/keyrings/google-chrome.asc' \
+      'echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.asc] https://dl.google.com/linux/chrome/deb/ stable main" > /target/etc/apt/sources.list.d/google-chrome.list' \
+      'in-target apt-get update' \
+      'in-target apt-get install -y google-chrome-stable' \
+      '' \
+      '# JetBrainsMono Nerd Font from github releases (runs in-target so curl has TLS)' \
+      'in-target mkdir -p /usr/local/share/fonts/JetBrainsMono-Nerd' \
+      'in-target sh -c "curl -fsSL https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest | jq -r .tag_name > /tmp/nf_ver"' \
+      'NF_VER=$(in-target cat /tmp/nf_ver)' \
+      'in-target sh -c "curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/download/${NF_VER}/JetBrainsMono.tar.xz -o /tmp/JBM.tar.xz"' \
+      'in-target tar -xf /tmp/JBM.tar.xz -C /usr/local/share/fonts/JetBrainsMono-Nerd' \
+      'in-target rm /tmp/nf_ver /tmp/JBM.tar.xz' \
+      'in-target fc-cache -f' \
+      '' \
+      '# Snapper configs (no-op if snapper is not installed via pkgsel/include)' \
+      'if in-target sh -c "command -v snapper >/dev/null 2>&1"; then' \
+      '    in-target snapper -c root create-config /' \
+      '    in-target snapper -c data create-config /data' \
+      'fi' \
+      '' \
+      'echo "late.sh completed OK"' \
+    > /target/root/late.sh; \
+    chmod +x /target/root/late.sh; \
+    sh /target/root/late.sh
 

@@ -1,0 +1,274 @@
+---
+# my_os system apps
+# Installs desktop applications on a freshly-preseeded Debian 13 system.
+# Run:  sudo ansible-playbook -i inventory.ini site.yml
+# Check (dry-run): sudo ansible-playbook -i inventory.ini site.yml --check
+# Single app only: sudo ansible-playbook -i inventory.ini site.yml --tags vscode
+
+- name: Install system apps
+  hosts: local
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    # -----------------------------------------------------------------------
+    # Apps from Debian main repository — simplest case
+    # -----------------------------------------------------------------------
+    - name: Debian-repo apps (libreoffice meta, telegram-desktop)
+      ansible.builtin.apt:
+        name:
+          - libreoffice
+          - telegram-desktop
+        state: present
+        update_cache: true
+      tags: [debian-repo, libreoffice, telegram]
+
+    # -----------------------------------------------------------------------
+    # VS Code — Microsoft apt repo
+    # -----------------------------------------------------------------------
+    - name: VS Code | keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+      tags: [vscode]
+
+    - name: VS Code | Microsoft GPG key
+      ansible.builtin.get_url:
+        url: https://packages.microsoft.com/keys/microsoft.asc
+        dest: /etc/apt/keyrings/microsoft.asc
+        mode: "0644"
+      tags: [vscode]
+
+    - name: VS Code | apt repo
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.asc] https://packages.microsoft.com/repos/code stable main"
+        filename: vscode
+        state: present
+      tags: [vscode]
+
+    - name: VS Code | install code
+      ansible.builtin.apt:
+        name: code
+        state: present
+        update_cache: true
+      tags: [vscode]
+
+    # -----------------------------------------------------------------------
+    # DBeaver CE — direct .deb
+    # -----------------------------------------------------------------------
+    - name: DBeaver CE | download latest .deb
+      ansible.builtin.get_url:
+        url: https://dbeaver.io/files/dbeaver-ce_latest_amd64.deb
+        dest: /tmp/dbeaver-ce.deb
+        mode: "0644"
+        force: true
+      tags: [dbeaver]
+
+    - name: DBeaver CE | install
+      ansible.builtin.apt:
+        deb: /tmp/dbeaver-ce.deb
+      tags: [dbeaver]
+
+    # -----------------------------------------------------------------------
+    # Obsidian — latest .deb from GitHub releases
+    # -----------------------------------------------------------------------
+    - name: Obsidian | query latest release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest
+        return_content: true
+      register: obsidian_release
+      tags: [obsidian]
+
+    - name: Obsidian | resolve amd64 .deb URL
+      ansible.builtin.set_fact:
+        obsidian_deb_url: >-
+          {{
+            obsidian_release.json.assets
+            | selectattr('name', 'match', 'obsidian_.*_amd64\.deb$')
+            | map(attribute='browser_download_url')
+            | first
+          }}
+      tags: [obsidian]
+
+    - name: Obsidian | download .deb
+      ansible.builtin.get_url:
+        url: "{{ obsidian_deb_url }}"
+        dest: /tmp/obsidian.deb
+        mode: "0644"
+      tags: [obsidian]
+
+    - name: Obsidian | install
+      ansible.builtin.apt:
+        deb: /tmp/obsidian.deb
+      tags: [obsidian]
+
+    # -----------------------------------------------------------------------
+    # Bruno — latest .deb from GitHub releases
+    # -----------------------------------------------------------------------
+    - name: Bruno | query latest release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/usebruno/bruno/releases/latest
+        return_content: true
+      register: bruno_release
+      tags: [bruno]
+
+    - name: Bruno | resolve amd64 .deb URL
+      ansible.builtin.set_fact:
+        bruno_deb_url: >-
+          {{
+            bruno_release.json.assets
+            | selectattr('name', 'match', 'bruno_.*_amd64\.deb$')
+            | map(attribute='browser_download_url')
+            | first
+          }}
+      tags: [bruno]
+
+    - name: Bruno | download .deb
+      ansible.builtin.get_url:
+        url: "{{ bruno_deb_url }}"
+        dest: /tmp/bruno.deb
+        mode: "0644"
+      tags: [bruno]
+
+    - name: Bruno | install
+      ansible.builtin.apt:
+        deb: /tmp/bruno.deb
+      tags: [bruno]
+
+    # -----------------------------------------------------------------------
+    # Throne — SOCKS5/VPN proxy client; .deb from GitHub releases
+    # Provides the local SOCKS5 on 127.0.0.1:2080 which privoxy wraps.
+    # -----------------------------------------------------------------------
+    - name: Throne | query latest release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/throneproj/Throne/releases/latest
+        return_content: true
+      register: throne_release
+      tags: [throne]
+
+    - name: Throne | resolve amd64 .deb URL
+      ansible.builtin.set_fact:
+        throne_deb_url: >-
+          {{
+            throne_release.json.assets
+            | selectattr('name', 'match', '.*amd64\.deb$')
+            | map(attribute='browser_download_url')
+            | first
+          }}
+      tags: [throne]
+
+    - name: Throne | download .deb
+      ansible.builtin.get_url:
+        url: "{{ throne_deb_url }}"
+        dest: /tmp/throne.deb
+        mode: "0644"
+      tags: [throne]
+
+    - name: Throne | install
+      ansible.builtin.apt:
+        deb: /tmp/throne.deb
+      tags: [throne]
+
+    # -----------------------------------------------------------------------
+    # Postman — tarball into /opt + symlink + .desktop entry
+    # -----------------------------------------------------------------------
+    - name: Postman | download tarball
+      ansible.builtin.get_url:
+        url: https://dl.pstmn.io/download/latest/linux_64
+        dest: /tmp/postman.tar.gz
+        mode: "0644"
+      tags: [postman]
+
+    - name: Postman | extract to /opt
+      ansible.builtin.unarchive:
+        src: /tmp/postman.tar.gz
+        dest: /opt
+        remote_src: true
+        creates: /opt/Postman/Postman
+      tags: [postman]
+
+    - name: Postman | symlink to /usr/local/bin
+      ansible.builtin.file:
+        src: /opt/Postman/Postman
+        dest: /usr/local/bin/postman
+        state: link
+      tags: [postman]
+
+    - name: Postman | desktop entry
+      ansible.builtin.copy:
+        dest: /usr/share/applications/postman.desktop
+        mode: "0644"
+        content: |
+          [Desktop Entry]
+          Name=Postman
+          Exec=/opt/Postman/Postman
+          Icon=/opt/Postman/app/resources/app/assets/icon.png
+          Type=Application
+          Categories=Development;
+      tags: [postman]
+
+    # -----------------------------------------------------------------------
+    # Redis Insight — AppImage into /opt + .desktop entry
+    # (no official .deb for Redis Insight 2.x)
+    # -----------------------------------------------------------------------
+    - name: Redis Insight | download AppImage
+      ansible.builtin.get_url:
+        url: https://download.redisinsight.redis.com/latest/RedisInsight-linux-x86_64.AppImage
+        dest: /opt/RedisInsight.AppImage
+        mode: "0755"
+      tags: [redisinsight]
+
+    - name: Redis Insight | desktop entry
+      ansible.builtin.copy:
+        dest: /usr/share/applications/redisinsight.desktop
+        mode: "0644"
+        content: |
+          [Desktop Entry]
+          Name=Redis Insight
+          Exec=/opt/RedisInsight.AppImage
+          Icon=redisinsight
+          Type=Application
+          Categories=Development;
+      tags: [redisinsight]
+
+    # -----------------------------------------------------------------------
+    # Privoxy — HTTP→SOCKS5 bridge (user runs SOCKS5 on 127.0.0.1:2080)
+    # Package itself is installed by preseed; here we configure + enable.
+    # -----------------------------------------------------------------------
+    - name: Privoxy | forward-socks5 to 127.0.0.1:2080
+      ansible.builtin.lineinfile:
+        path: /etc/privoxy/config
+        line: "forward-socks5 / 127.0.0.1:2080 ."
+        state: present
+      notify: restart privoxy
+      tags: [privoxy]
+
+    - name: Privoxy | enable + start service
+      ansible.builtin.systemd:
+        name: privoxy
+        enabled: true
+        state: started
+      tags: [privoxy]
+
+    # -----------------------------------------------------------------------
+    # Cleanup downloaded .debs
+    # -----------------------------------------------------------------------
+    - name: Cleanup | remove downloaded .deb/tarball files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/dbeaver-ce.deb
+        - /tmp/obsidian.deb
+        - /tmp/bruno.deb
+        - /tmp/throne.deb
+        - /tmp/postman.tar.gz
+      tags: [cleanup]
+
+  handlers:
+    - name: restart privoxy
+      ansible.builtin.systemd:
+        name: privoxy
+        state: restarted

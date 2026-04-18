@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/user/.claude/projects/-home-user-mr-build-preseed/memory/**)",
+      "Read(//home/user/.claude/projects/**)"
+    ]
+  }
+}
