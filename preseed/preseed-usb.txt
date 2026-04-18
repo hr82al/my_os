@@ -187,6 +187,10 @@ d-i partman-auto-lvm/guided_size string max
 # The same for pre-existing software RAID array (USB SSD should have none):
 d-i partman-md/device_remove_md boolean true
 
+# Suppress the "no swap configured" warning — swap on USB SSD is intentionally
+# omitted (SSD wear + we enable zram-swap via late_command instead).
+d-i partman-basicfilesystems/no_swap boolean false
+
 # You can choose one of the predefined partitioning recipes:
 # - atomic: all files in one partition
 # - home:   separate /home partition
