@@ -27,6 +27,48 @@
     ansible.builtin.uri:
       timeout: 30
 
+  pre_tasks:
+    # -----------------------------------------------------------------------
+    # Auto-cleanup: удалить легаси apt-артефакты от предыдущих версий ansible.
+    # Ранее мы создавали свой /etc/apt/keyrings/microsoft.asc + свой
+    # vscode.list с этим путём — это конфликтует с postinst `code` пакета
+    # который использует /usr/share/keyrings/microsoft.gpg.
+    # Условие: чистим ТОЛЬКО если наш старый keyring существует (признак
+    # «мусора от прошлых runs»). После первого прогона postinst создаст
+    # свой корректный vscode.list — его мы НЕ трогаем на последующих runs.
+    # -----------------------------------------------------------------------
+    - name: Cleanup | check for legacy microsoft.asc keyring
+      ansible.builtin.stat:
+        path: /etc/apt/keyrings/microsoft.asc
+      register: legacy_ms_key
+      tags: [always, cleanup-legacy]
+
+    - name: Cleanup | find VS Code apt-sources referencing legacy keyring
+      ansible.builtin.find:
+        paths: /etc/apt/sources.list.d/
+        patterns:
+          - "vscode*"
+          - "code*"
+        contains: ".*/etc/apt/keyrings/microsoft\\.asc.*"
+      register: legacy_vscode_sources
+      when: legacy_ms_key.stat.exists
+      tags: [always, cleanup-legacy]
+
+    - name: Cleanup | remove conflicting VS Code apt sources
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ legacy_vscode_sources.files | default([]) }}"
+      when: legacy_ms_key.stat.exists
+      tags: [always, cleanup-legacy]
+
+    - name: Cleanup | remove legacy microsoft.asc
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/microsoft.asc
+        state: absent
+      when: legacy_ms_key.stat.exists
+      tags: [always, cleanup-legacy]
+
   tasks:
 
     # -----------------------------------------------------------------------
