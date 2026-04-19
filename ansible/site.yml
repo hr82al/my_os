@@ -42,34 +42,21 @@
       tags: [debian-repo, libreoffice, pgcli]
 
     # -----------------------------------------------------------------------
-    # VS Code — Microsoft apt repo
+    # VS Code — прямой .deb (Microsoft direct download).
+    # Postinst-скрипт .deb сам настраивает apt-source + GPG-key для будущих
+    # обновлений через обычный `apt upgrade`. Не создаём свой
+    # sources.list.d/vscode.list чтобы избежать Signed-By conflict.
     # -----------------------------------------------------------------------
-    - name: VS Code | keyrings directory
-      ansible.builtin.file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: "0755"
-      tags: [vscode]
-
-    - name: VS Code | Microsoft GPG key
+    - name: VS Code | download latest .deb (Microsoft direct link)
       ansible.builtin.get_url:
-        url: https://packages.microsoft.com/keys/microsoft.asc
-        dest: /etc/apt/keyrings/microsoft.asc
+        url: https://go.microsoft.com/fwlink/?LinkID=760868
+        dest: /tmp/vscode.deb
         mode: "0644"
       tags: [vscode]
 
-    - name: VS Code | apt repo
-      ansible.builtin.apt_repository:
-        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.asc] https://packages.microsoft.com/repos/code stable main"
-        filename: vscode
-        state: present
-      tags: [vscode]
-
-    - name: VS Code | install code
+    - name: VS Code | install
       ansible.builtin.apt:
-        name: code
-        state: present
-        update_cache: true
+        deb: /tmp/vscode.deb
       tags: [vscode]
 
     # -----------------------------------------------------------------------
@@ -467,6 +454,7 @@
         path: "{{ item }}"
         state: absent
       loop:
+        - /tmp/vscode.deb
         - /tmp/dbgate.deb
         - /tmp/obsidian.deb
         - /tmp/chezmoi.deb

@@ -194,6 +194,36 @@ systemctl enable --now privoxy
 
 **Паттерн выбора для других категорий в будущем:** соблюдать иерархию из [CLAUDE.md §1](../../CLAUDE.md) — сначала CLI, потом native GUI, потом Electron, только потом JVM.
 
+## Q: VS Code — через apt-репо или прямой `.deb`?
+
+**Первая попытка:** apt-repository + ключ в `/etc/apt/keyrings/microsoft.asc` + `apt install code`.
+
+**Проблема:** VS Code `.deb` постинсталлер **сам** создаёт свой `/etc/apt/sources.list.d/vscode.list` с ключом в `/usr/share/keyrings/microsoft.gpg` (или `/etc/apt/keyrings/packages.microsoft.gpg` — зависит от версии). Это **конфликтует** с нашим:
+```
+E:Conflicting values set for option Signed-By regarding source
+https://packages.microsoft.com/repos/code/ stable:
+/etc/apt/keyrings/microsoft.asc != /usr/share/keyrings/microsoft.gpg
+```
+После этого **весь** `apt update` падает.
+
+**Решение: прямой `.deb`** через `https://go.microsoft.com/fwlink/?LinkID=760868` (официальный «всегда latest» redirect).
+
+- Мы НЕ создаём apt-source, не копируем key — postinst `.deb` сам всё настраивает
+- Будущие обновления через `apt upgrade` работают автоматически
+- Нет конфликта по `Signed-By`
+
+Паттерн как у DbGate/Obsidian — `get_url` + `apt: deb:`. Общий: **не конкурировать с postinst**.
+
+**Восстановление повреждённой системы** (если ansible уже создала свой conflicting source):
+```bash
+# Удалить наши файлы (если есть)
+sudo rm -f /etc/apt/keyrings/microsoft.asc
+# Найти все vscode-sources
+sudo grep -rl "packages.microsoft.com/repos/code" /etc/apt/
+# Оставить только один (тот что от postinst кода) или оба удалить и переустановить
+sudo apt update
+```
+
 ## Ссылки
 
 - [Ansible overview](README.md)
