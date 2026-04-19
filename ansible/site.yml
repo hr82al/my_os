@@ -219,7 +219,7 @@
         bruno_deb_url: >-
           {{
             bruno_release.json.assets
-            | selectattr('name', 'match', 'bruno_.*_amd64\.deb$')
+            | selectattr('name', 'match', 'bruno_.*_amd64_linux\.deb$')
             | map(attribute='browser_download_url')
             | first
           }}

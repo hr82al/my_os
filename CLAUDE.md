@@ -349,6 +349,45 @@ done
 
 Если URL возвращает не-2xx — искать замену до коммита, не после install'а.
 
+### 10. Regex для GitHub assets — **обязательно** тестировать на реальном API-response
+
+⚠️ **URL возвращает 200 ≠ regex матчит asset.** Это разные проверки. Naming convention assets у проектов меняется: Bruno переходил от `bruno_<v>_amd64.deb` на `bruno_<v>_amd64_linux.deb` — URL работал, regex упал с `No first item, sequence was empty`.
+
+Перед коммитом ansible-задач с `selectattr('name', 'match', 'xxx')`:
+
+```bash
+# Вставить в /tmp/check-regex.sh и запустить
+check() {
+    local repo="$1" regex="$2" name="$3"
+    local result
+    result=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
+        | jq -r ".assets[] | select(.name | test(\"$regex\")) | .name" | head -3)
+    if [ -n "$result" ]; then
+        echo "✅ $name  →  $result"
+    else
+        echo "❌ $name  — regex '$regex' не матчит ни одного asset"
+        echo "   Реальные имена:"
+        curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
+            | jq -r '.assets[].name' | head -5 | sed 's/^/     /'
+    fi
+}
+
+# вызов для каждого repo + regex который используется в site.yml
+check "usebruno/bruno"     'bruno_.*_amd64_linux\\.deb$'         "bruno"
+check "obsidianmd/obsidian-releases" 'obsidian_.*_amd64\\.deb$'  "obsidian"
+# ... etc
+```
+
+**Симптом проблемы в runtime ansible:**
+```
+Error while resolving value for 'xxx_deb_url': No first item, sequence was empty.
+```
+→ regex не матчит ни одного asset. Fix — смотреть **реальные** имена в release, обновить regex.
+
+**Ошибки naming которые встречали:**
+- `bruno_<v>_amd64.deb` → `bruno_<v>_amd64_linux.deb` (добавили `_linux` перед `.deb`)
+- Redis Insight: `/latest/RedisInsight-*` → `/latest-v3/Redis-Insight-*` (split в имени)
+
 Симптом в syslog который означает «late_command сломал installer»:
 ```
 finish-install: /bin/preseed_command: return: line 88: Illegal number:
