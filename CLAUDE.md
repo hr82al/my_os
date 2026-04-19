@@ -91,6 +91,70 @@ sed -i "/^deb cdrom:/d" /target/etc/apt/sources.list
 по паттерну Bruno/Obsidian: `uri` для latest release → `get_url` для `.deb` →
 `apt: deb:`.
 
+## Документация — всё в `wiki/`
+
+Структура wiki с вложенностью по секциям (preseed/, ansible/, ventoy/,
+installation/, troubleshooting/, post-install/). Главный индекс —
+[`wiki/README.md`](wiki/README.md).
+
+**При редактировании кода (preseed, ansible, bootstrap.sh) — синхронно обновлять соответствующий файл в wiki.**
+
+## Захват Q&A — правило
+
+⚠️ **КАЖДЫЙ вопрос пользователя с архитектурным/дизайнерским смыслом и ответ на него** должен попасть в `wiki/<section>/decisions.md`.
+
+### Что считать «вопросом для decisions»
+
+Вопросы и ответы, которые стоит сохранять:
+
+✅ **Сохранять:**
+- «Почему X, а не Y?» (любой trade-off выбор)
+- «Можно ли сделать X?» — и обсуждение альтернатив
+- «Как это работает?» — объяснение механизма/поведения
+- «А что если...» — what-if анализ
+- Решения по размерам, путям, именам (`ESP 512 MiB потому что...`)
+- Обнаруженные баги и их фиксы (в `troubleshooting/lessons-learned.md`)
+
+❌ **Не сохранять (ephemeral):**
+- «Обнови флешку» / «продолжай» / «комитить буду сам»
+- Опечатки, уточнения вроде «я подключил, проверь»
+- Шаг-за-шагом подтверждения
+- Повторяющиеся команды, которые уже есть в документации
+
+### Формат записи
+
+Каждая Q&A в `decisions.md` — как секция:
+
+```md
+## Q: Почему X, а не Y?
+
+**Контекст:** коротко в чём дилемма.
+
+**Обсудили:** таблица или bullet list альтернатив с плюсами/минусами.
+
+**Решение:** выбранный вариант + краткое почему.
+
+Trade-off: [если есть]
+```
+
+### Куда писать
+
+| Тема вопроса | Файл |
+|---|---|
+| Разметка диска, partman, late_command, mirror, packages | [`wiki/preseed/decisions.md`](wiki/preseed/decisions.md) |
+| Playbook, apps install methods, privoxy | [`wiki/ansible/decisions.md`](wiki/ansible/decisions.md) |
+| Ventoy setup, Fedora quirks | [`wiki/ventoy/decisions.md`](wiki/ventoy/decisions.md) |
+| Процедура установки, variants, portable boot | [`wiki/installation/decisions.md`](wiki/installation/decisions.md) |
+| Debug methodology, логи, валидация | [`wiki/troubleshooting/decisions.md`](wiki/troubleshooting/decisions.md) |
+| bootstrap.sh, chezmoi, atuin, rustup | [`wiki/post-install/decisions.md`](wiki/post-install/decisions.md) |
+| **Встреченные баги и фиксы** | [`wiki/troubleshooting/lessons-learned.md`](wiki/troubleshooting/lessons-learned.md) |
+
+### Когда писать
+
+- **Немедленно** после того как вопрос/ответ произошёл (не в конце сессии — забудется)
+- Если решение сложное — короткую версию в `decisions.md`, длинную — в тематическом файле (например `preseed/late-command.md`) со ссылкой
+- При повторном вопросе о том же — обновить существующую запись, не дублировать
+
 ## Стиль коммуникации
 
 - Русский язык, технические термины en — не переводить

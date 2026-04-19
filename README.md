@@ -1,113 +1,65 @@
 # my_os
 
 Воспроизводимая установка **Debian 13 (trixie)** для личной рабочей станции.
-Цель — «кнопка восстановления»: из пустого диска → до полностью настроенной
-системы одним прогоном.
+От пустого диска до полностью настроенной ОС одним прогоном.
 
-## Слои
+📖 **Полная документация:** [wiki/](wiki/README.md)
+
+## TL;DR
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  preseed/        — установка ОС (разметка, базовые пакеты)   │  Ventoy USB
-│  ↓                                                           │
-│  ansible/        — desktop-приложения + system-config        │  bootstrap.sh
-│  ↓                                                           │
-│  chezmoi         — пользовательские dotfiles                 │  bootstrap.sh
-│  ↓                                                           │
-│  user-tools      — atuin, rustup, go tools                   │  bootstrap.sh
-│  ↓                                                           │
-│  backup restore  — PG-volumes, /home/docs, /data/*           │  ручной шаг
-└──────────────────────────────────────────────────────────────┘
+preseed (Ventoy USB) → установка ОС
+        ↓
+bootstrap.sh → ansible + chezmoi + user-tools → готовая система
 ```
 
-## Порядок использования
+**Установка:**
+1. Подготовить Ventoy-флешку ([wiki/30-ventoy.md](wiki/30-ventoy.md))
+2. Boot с флешки → выбрать preseed ([wiki/40-installation.md](wiki/40-installation.md)):
+   - `preseed.txt` — на внутренний NVMe (LVM+btrfs, вариант A)
+   - `preseed-usb.txt` — на внешний USB SSD (ext4, вариант B)
+3. После первого boot'а: `cd ~/mr/workspace/my_os && ./bootstrap.sh`
 
-### 1. Установка ОС (один раз перед первой загрузкой)
-
-Два варианта preseed — выбор в меню Ventoy через picker:
-
-| Файл | Куда ставит | Разметка |
-|---|---|---|
-| [`preseed/preseed.txt`](preseed/preseed.txt) | внутренний NVMe `/dev/nvme0n1` | LVM + btrfs + /data + snapper |
-| [`preseed/preseed-usb.txt`](preseed/preseed-usb.txt) | внешний USB SSD (by-id) | ext4 single root + tmpfs/sysctl/zram оптимизации |
-
-Шаги:
-- BIOS → Boot menu → USB (Ventoy)
-- «Debian 13 (auto-install via preseed)» → Ventoy picker → выбрать вариант preseed
-- После ребута: логин `user` / `changeme` (поменяйте сразу)
-
-Проверочный чек-лист и диагностика проблем — в
-[`preseed/POST-INSTALL.md`](preseed/POST-INSTALL.md).
-
-### 2. Поверх ОС — приложения и настройки
-
-Preseed уже клонирует этот репо в `~/mr/workspace/my_os/` при установке
-(на этапе `late_command`). После первого логина просто:
-
-```bash
-cd ~/mr/workspace/my_os
-./bootstrap.sh
-```
-
-Это прогоняет:
-- `ansible/site.yml` → все desktop-приложения и system-config (privoxy, …)
-- `chezmoi init --apply $DOTFILES_REPO` → ваши dotfiles (если репо задан)
-- `atuin`, `rustup`, `go install …` → per-user инструменты
-
-Отдельные этапы:
-```bash
-./bootstrap.sh ansible     # только system apps
-./bootstrap.sh dotfiles    # только chezmoi
-./bootstrap.sh user-tools  # только atuin/rustup/go
-```
-
-### 3. Данные (backups) — отдельно
-
-Не входят в этот pipeline. PG-volumes, `/home/user/docs`, `/data/*` —
-восстанавливать по своей стратегии (restic/rsync и т.п.).
-
-## Структура репо
+## Структура
 
 ```
 my_os/
-├── README.md                ← вы здесь
-├── bootstrap.sh             ← one-button restore (ansible + chezmoi + user-tools)
+├── README.md              ← краткое summary (этот файл)
+├── CLAUDE.md              ← правила валидации для Claude Code
+├── bootstrap.sh           ← one-button restore (ansible + chezmoi + user-tools)
+├── scripts/
+│   └── sync-flash.sh      ← обновить Ventoy-флешку из репо (rsync по serial)
+├── wiki/                  ← 📖 полная документация
+│   ├── README.md          ← индекс wiki
+│   ├── 00-overview.md
+│   ├── 01-hardware.md
+│   ├── 10..15-preseed-*.md
+│   ├── 20..21-ansible-*.md
+│   ├── 30-ventoy.md
+│   ├── 40-installation.md
+│   ├── 41-post-install-checks.md
+│   ├── 50-troubleshooting.md
+│   ├── 51-lessons-learned.md
+│   ├── 60-bootstrap.md
+│   └── 70-data-migration.md
 ├── preseed/
-│   ├── preseed.txt          ← preseed для внутреннего NVMe (LVM+btrfs)
-│   ├── preseed-usb.txt      ← preseed для внешнего USB SSD (ext4, USB-оптимизации)
-│   ├── ventoy.json          ← master-конфиг Ventoy (picker для двух preseed)
-│   ├── CONTEXT.md           ← полный контекст проекта (решения + следующий шаг)
-│   ├── POST-INSTALL.md      ← чек-лист проверки и диагностика проблем
-│   ├── find-fastest-mirror.sh
-│   └── example-preseed.txt  ← оригинал из Debian (не трогать)
+│   ├── preseed.txt        ← вариант A (NVMe, LVM+btrfs)
+│   ├── preseed-usb.txt    ← вариант B (USB SSD, ext4)
+│   ├── ventoy.json        ← конфиг Ventoy (picker)
+│   └── ...
 └── ansible/
-    ├── site.yml             ← playbook с 9 приложениями + privoxy-config
-    ├── inventory.ini
-    └── README.md            ← запуск, теги, как добавлять новые приложения
+    ├── site.yml
+    └── inventory.ini
 ```
 
-## Философия
+## Навигация по wiki
 
-- **preseed = минимальная прослойка.** Только то что должно быть в момент
-  первой загрузки (диск, user, базовые пакеты). Без дополнений «на потом».
-- **ansible = system-level.** Всё что ставится/конфигурируется как root
-  на системе (apps, services, repos, config-файлы в `/etc/`).
-- **chezmoi = user-level.** Всё что живёт под `~/` (dotfiles, конфиги
-  приложений).
-- **bootstrap.sh = оркестратор.** Тупой wrapper вокруг первых трёх.
+| Начать с | Вопрос |
+|---|---|
+| [00 — Overview](wiki/00-overview.md) | Что это за проект, философия |
+| [40 — Installation](wiki/40-installation.md) | Как установить |
+| [41 — Post-install checks](wiki/41-post-install-checks.md) | Убедиться что всё работает |
+| [50 — Troubleshooting](wiki/50-troubleshooting.md) | Что-то сломалось |
+| [51 — Lessons learned](wiki/51-lessons-learned.md) | Подводные камни которые уже встречали |
 
-Разделение даёт тестируемость: каждый слой меняется/запускается отдельно.
-
-## Текущий статус
-
-См. секцию «ОСТАЛОСЬ» в [`preseed/CONTEXT.md`](preseed/CONTEXT.md) — там
-полный контекст проекта, принятые решения и что ещё предстоит.
-
-Коротко:
-- ✅ preseed.txt написан и провалидирован
-- ✅ Ventoy-флешка собрана
-- ✅ ansible-playbook с 9 приложениями (VS Code, DBeaver, Obsidian, Bruno,
-  Throne, Postman, Redis Insight, LibreOffice, Telegram) + privoxy-config
-- ✅ bootstrap.sh
-- ⏳ первая физическая установка (ждёт железа)
-- ⏳ dotfiles repo (chezmoi) — будет после успешной установки
+Полный индекс: [wiki/README.md](wiki/README.md).

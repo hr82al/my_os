@@ -12,8 +12,8 @@
         {
             "image": "/debian-13.4.0-amd64-DVD-1.iso",
             "template": [
-                "/preseed.txt",
-                "/preseed-usb.txt"
+                "/preseed/preseed.txt",
+                "/preseed/preseed-usb.txt"
             ]
         }
     ]

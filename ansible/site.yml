@@ -287,6 +287,27 @@
       tags: [privoxy]
 
     # -----------------------------------------------------------------------
+    # User scripts — ~/.local/bin/ (ffmpeg-based capture, etc.)
+    # -----------------------------------------------------------------------
+    - name: User scripts | ensure ~/.local/bin exists
+      ansible.builtin.file:
+        path: /home/user/.local/bin
+        state: directory
+        owner: user
+        group: user
+        mode: "0755"
+      tags: [user-scripts, capture]
+
+    - name: User scripts | deploy capture (screen + audio recording)
+      ansible.builtin.copy:
+        src: capture.sh
+        dest: /home/user/.local/bin/capture
+        owner: user
+        group: user
+        mode: "0755"
+      tags: [user-scripts, capture]
+
+    # -----------------------------------------------------------------------
     # Cleanup downloaded .debs
     # -----------------------------------------------------------------------
     - name: Cleanup | remove downloaded .deb/tarball files

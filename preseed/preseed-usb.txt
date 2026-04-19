@@ -422,6 +422,8 @@ tasksel tasksel/first multiselect standard
 #   audio:    pipewire pipewire-pulse wireplumber
 #   misc:     polkitd acpid tlp plymouth plymouth-themes  (policykit-1 removed in trixie)
 #   tools:    tmux rsync ncdu iotop iftop tree jq pv bash-completion rclone privoxy bubblewrap
+#   media:    ffmpeg (+ pulseaudio-utils for pactl, x11-utils for xrandr — used by `capture`)
+#   graphics: flameshot (screenshot), gimp (raster), inkscape (vector)
 #   config-mgmt: ansible  (chezmoi installed from github via ansible, not in Debian main)
 #   fonts:    fonts-noto fonts-noto-color-emoji fonts-firacode fonts-jetbrains-mono
 #             (JetBrainsMono Nerd Font installed via late_command)
@@ -438,6 +440,8 @@ d-i pkgsel/include string \
   polkitd acpid tlp plymouth plymouth-themes \
   tmux rsync ncdu iotop iftop tree jq pv bash-completion \
   rclone privoxy bubblewrap \
+  ffmpeg pulseaudio-utils x11-utils \
+  flameshot gimp inkscape \
   preload zram-tools \
   efibootmgr \
   ansible \
@@ -634,6 +638,17 @@ d-i preseed/late_command string \
       'mkdir -p /target/home/user/mr/workspace' \
       'in-target chown -R user:user /home/user/mr' \
       'in-target sudo -u user git clone https://github.com/hr82al/my_os.git /home/user/mr/workspace/my_os' \
+      '' \
+      '# --- Autologin user into qtile via lightdm ---' \
+      'mkdir -p /target/etc/lightdm/lightdm.conf.d' \
+      'cat > /target/etc/lightdm/lightdm.conf.d/50-autologin.conf <<AL_EOF' \
+      '[Seat:*]' \
+      'autologin-user=user' \
+      'autologin-user-timeout=0' \
+      'autologin-session=qtile' \
+      'AL_EOF' \
+      'in-target groupadd -f autologin' \
+      'in-target gpasswd -a user autologin' \
       '' \
       '# --- Clean up laptop NVRAM: remove any "debian" boot entry added by grub-install' \
       '#     The USB SSD boots via removable-media path /EFI/BOOT/BOOTX64.EFI — no' \
