@@ -29,6 +29,9 @@ ansible `apt:`. Apt-транзакция атомарная: один несущ
 установку и выдаёт **каскад фейковых** ошибок «unable to locate X» для
 несвязанных пакетов.
 
+**Два уровня валидации:**
+
+**a) apt-cache show** — быстрая проверка что пакет есть в метаданных:
 ```bash
 docker run --rm debian:13 bash -c '
     apt-get update -qq
@@ -36,6 +39,27 @@ docker run --rm debian:13 bash -c '
         apt-cache show "$p" >/dev/null 2>&1 && echo "✅ $p" || echo "❌ $p MISSING"
     done'
 ```
+
+**b) apt-get install --simulate** — **строже**: проверяет что пакет
+устанавливается, его зависимости разрешаются, нет конфликтов.
+```bash
+docker run --rm debian:13 bash -c '
+    apt-get update -qq
+    apt-get install -y --simulate --no-install-recommends <все пакеты одной строкой> 2>&1 | tail -3'
+```
+
+Если выхлоп заканчивается на `Conf <pkg>` строках — ок. Если `E: Unable to locate
+package X` — валится.
+
+**НЕ ДОВЕРЯТЬ** summary-строке типа «все найдены» — **читать полный список**
+MISSING в выхлопе. Был случай: validation-скрипт показал `✅ все найдены`, а
+реально один пакет (`telegram-desktop`) отсутствовал. Строка `❌ ОТСУТСТВУЮТ:`
+может быть замаскирована среди другого вывода.
+
+**Верификация что пакет нашли не по описанию.** `apt-cache search foo` возвращает
+все пакеты где `foo` упоминается в описании. Нужно `apt-cache show foo` — имя в
+точности. Аналогично не путать `telegram-desktop` (не существует) с
+`telegram-send`, `python3-python-telegram-bot` (существуют но не то что нужно).
 
 **Известные подводные камни** (различия bookworm → trixie):
 

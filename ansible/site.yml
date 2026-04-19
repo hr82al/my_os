@@ -15,14 +15,13 @@
     # -----------------------------------------------------------------------
     # Apps from Debian main repository — simplest case
     # -----------------------------------------------------------------------
-    - name: Debian-repo apps (libreoffice meta, telegram-desktop)
+    - name: Debian-repo apps (libreoffice meta)
       ansible.builtin.apt:
         name:
           - libreoffice
-          - telegram-desktop
         state: present
         update_cache: true
-      tags: [debian-repo, libreoffice, telegram]
+      tags: [debian-repo, libreoffice]
 
     # -----------------------------------------------------------------------
     # VS Code — Microsoft apt repo
@@ -206,6 +205,49 @@
       tags: [throne]
 
     # -----------------------------------------------------------------------
+    # Telegram Desktop — tarball into /opt (нет в Debian main, только
+    # сторонние пакеты/Flatpak). Официальная сборка с telegram.org.
+    # -----------------------------------------------------------------------
+    - name: Telegram | download tarball
+      ansible.builtin.get_url:
+        url: https://telegram.org/dl/desktop/linux
+        dest: /tmp/telegram.tar.xz
+        mode: "0644"
+      tags: [telegram]
+
+    - name: Telegram | extract to /opt
+      ansible.builtin.unarchive:
+        src: /tmp/telegram.tar.xz
+        dest: /opt
+        remote_src: true
+        creates: /opt/Telegram/Telegram
+      tags: [telegram]
+
+    - name: Telegram | symlink to /usr/local/bin
+      ansible.builtin.file:
+        src: /opt/Telegram/Telegram
+        dest: /usr/local/bin/telegram-desktop
+        state: link
+      tags: [telegram]
+
+    - name: Telegram | desktop entry
+      ansible.builtin.copy:
+        dest: /usr/share/applications/telegram-desktop.desktop
+        mode: "0644"
+        content: |
+          [Desktop Entry]
+          Name=Telegram Desktop
+          Comment=Official messaging app
+          Exec=/opt/Telegram/Telegram -- %u
+          Icon=telegram
+          Terminal=false
+          Type=Application
+          Categories=Network;InstantMessaging;Qt;
+          MimeType=x-scheme-handler/tg;
+          StartupWMClass=TelegramDesktop
+      tags: [telegram]
+
+    # -----------------------------------------------------------------------
     # Postman — tarball into /opt + symlink + .desktop entry
     # -----------------------------------------------------------------------
     - name: Postman | download tarball
@@ -249,7 +291,9 @@
     # -----------------------------------------------------------------------
     - name: Redis Insight | download AppImage
       ansible.builtin.get_url:
-        url: https://download.redisinsight.redis.com/latest/RedisInsight-linux-x86_64.AppImage
+        # URL меняется: раньше был /latest/RedisInsight-..., теперь /latest-v3/Redis-Insight-...
+        # Источник актуального URL: https://redis.io/downloads/
+        url: https://s3.amazonaws.com/redisinsight.download/public/latest-v3/Redis-Insight-linux-x86_64.AppImage
         dest: /opt/RedisInsight.AppImage
         mode: "0755"
       tags: [redisinsight]
@@ -389,6 +433,7 @@
         - /tmp/bruno.deb
         - /tmp/throne.deb
         - /tmp/postman.tar.gz
+        - /tmp/telegram.tar.xz
         - /tmp/JetBrainsMono-Nerd.tar.xz
       tags: [cleanup]
 
