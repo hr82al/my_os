@@ -625,14 +625,8 @@ d-i preseed/late_command string \
       'in-target apt-get update' \
       'in-target apt-get install -y google-chrome-stable' \
       '' \
-      '# --- JetBrainsMono Nerd Font from github releases ---' \
-      'in-target mkdir -p /usr/local/share/fonts/JetBrainsMono-Nerd' \
-      'in-target sh -c "curl -fsSL https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest | jq -r .tag_name > /tmp/nf_ver"' \
-      'NF_VER=$(in-target cat /tmp/nf_ver)' \
-      'in-target sh -c "curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/download/${NF_VER}/JetBrainsMono.tar.xz -o /tmp/JBM.tar.xz"' \
-      'in-target tar -xf /tmp/JBM.tar.xz -C /usr/local/share/fonts/JetBrainsMono-Nerd' \
-      'in-target rm /tmp/nf_ver /tmp/JBM.tar.xz' \
-      'in-target fc-cache -f' \
+      '# Nerd Font moved to ansible (tag: nerd-font) — не critical, external download' \
+      '# with GitHub CDN redirect был причиной падения late_command в installer.' \
       '' \
       '# --- Clone my_os repo into user home ---' \
       'mkdir -p /target/home/user/mr/workspace' \

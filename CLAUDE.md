@@ -91,6 +91,72 @@ sed -i "/^deb cdrom:/d" /target/etc/apt/sources.list
 по паттерну Bruno/Obsidian: `uri` для latest release → `get_url` для `.deb` →
 `apt: deb:`.
 
+### 6. Робастность late_command — проводить тщательные проверки
+
+`late_command` выполняется один раз во время установки, в ограниченном installer-окружении. Отладка: посмотреть лог → переустановить систему (долго). Поэтому **каждая внешняя команда должна быть проверена** перед коммитом.
+
+#### Что проверять
+
+**a. External URL downloads** — для **каждого** `curl`/`wget` в late_command:
+```bash
+# Проверить что URL реально отвечает 200 (а не 301, 302, 404):
+curl -fsSLI -o /dev/null -w "%{http_code}\n" "<URL>"
+# Если 200 — проверить что возвращает валидный контент:
+curl -fsSL "<URL>" | head -c 100
+```
+Проверить варианты: с redirect, с TLS, с auth/rate-limit (GitHub API limits).
+
+**b. Critical vs optional разделение в late_command**
+
+| Категория | Примеры | Если упало |
+|---|---|---|
+| **Critical** — валит install | partman, GRUB, создание user, root password | ✅ fail-fast (`set -e`) |
+| **System config** — нужен для boot'a | fstab, sources.list, базовые пакеты | ✅ fail-fast |
+| **Apps setup** — нужен для workflow | docker-ce, git clone my_os | ⚠️ fail-fast но только после валидации URL |
+| **Cosmetic / user-level** — можно доставить позже | Nerd Font, autologin, chrome, NVRAM-cleanup | ❌ **НЕ В late_command** — в ansible/bootstrap.sh |
+
+**Правило:** если шаг — cosmetic/user-level, **вынести в ansible**. Ansible:
+- Запускается на boot'нувшейся системе (легко отладить)
+- Тегируется (можно повторить: `--tags <имя>`)
+- Не валит install если упадёт
+
+**c. Wrap external calls даже в critical-части late_command**
+
+Если что-то ДОЛЖНО быть в late_command (не ansible) но external — обернуть в:
+```sh
+(
+    curl -fsSL "<url>" -o /tmp/file
+    # use file
+) || { echo "WARN: <step> failed, continue"; }
+```
+Exit code не пропагируется, но логируется для post-install-разбора.
+
+**d. Категоризация уже встреченных ошибок**
+
+| Что упало | Причина | Исправление |
+|---|---|---|
+| Nerd Font `curl: (22) 404` в installer | GitHub CDN redirect проблемы в installer chroot | Вынести в ansible (tag `nerd-font`), не в late_command |
+| apt-get update hang | cdrom: в sources.list | `disable-cdrom-entries` + sed |
+| pkgsel unable to locate | use_mirror=false по умолчанию | Явный `use_mirror true` |
+| pkgsel cascade «unable to locate» | один несуществующий пакет | Валидация пакетов через docker |
+
+**e. Checklist перед добавлением шага в late_command**
+
+1. Действительно ли это MUST-HAVE во время install? Или может быть в ansible?
+2. Использует ли internet? → проверить URL (`-fsSLI`) с redirect follow
+3. Использует ли пакет не из base? → проверить что пакет в pkgsel/include и существует
+4. Что произойдёт если упадёт? Inst.-blocking или degraded?
+5. Есть ли exit code propagation через `|| true` где нужно?
+
+Симптом в syslog который означает «late_command сломал installer»:
+```
+finish-install: /bin/preseed_command: return: line 88: Illegal number:
+log-output: sh: syntax error: unterminated quoted string
+init: process '/sbin/debian-installer' ... exited. Scheduling for restart.
+main-menu: INFO: Menu item 'finish-install' succeeded but requested to be left unconfigured.
+```
+«succeeded but requested to be left unconfigured» на re-tries = late_command ломает installer → installer крэшнулся → «Finish installation» не отвечает.
+
 ## Документация — всё в `wiki/`
 
 Структура wiki с вложенностью по секциям (preseed/, ansible/, ventoy/,

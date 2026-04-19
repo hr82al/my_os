@@ -119,8 +119,55 @@ systemctl enable --now privoxy
 
 **Зависимости добавлены в preseed:** `ffmpeg` (запись), `pulseaudio-utils` (`pactl` для default sink), `x11-utils` (`xrandr`).
 
+## Q: `with-proxy` — функция в `.bashrc` vs alias vs wrapper-script?
+
+**Контекст:** пользователь хочет `with-proxy <cmd> <args...>` → выполнить через privoxy (`HTTPS_PROXY=http://127.0.0.1:8118`).
+
+**Варианты:**
+| | alias | function в .bashrc | script в ~/.local/bin |
+|---|---|---|---|
+| Аргументы `"$@"` | ❌ не поддерживает | ✅ | ✅ |
+| Export env перед командой | ❌ alias это expansion | ✅ (env=val cmd args) | ✅ |
+| Доступен в bash | ✅ | ✅ | ✅ |
+| Доступен в sh (не-interactive) | ❌ | ❌ (только interactive bash) | ✅ |
+| Видно `which with-proxy` | ❌ | ❌ | ✅ |
+
+**Решение: function в `~/.bashrc`** — user попросил именно bashrc, и типичное использование — в interactive shell.
+
+**Деплой через ansible** `blockinfile` с маркером `# {mark} ANSIBLE MANAGED: with-proxy` — идемпотентно, можно обновлять без дубликатов.
+
+```yaml
+- ansible.builtin.blockinfile:
+    path: /home/user/.bashrc
+    marker: "# {mark} ANSIBLE MANAGED: with-proxy"
+    block: |
+      with-proxy() {
+          HTTPS_PROXY=http://127.0.0.1:8118 HTTP_PROXY=http://127.0.0.1:8118 "$@"
+      }
+  become: true
+  become_user: user
+  tags: [with-proxy, user-bashrc, privoxy]
+```
+
+**HTTP_PROXY тоже добавлен** — многие утилиты (apt, apt-get, git) смотрят обе переменные. Пользователь явно просил `HTTPS_PROXY`, но `HTTP_PROXY` с тем же значением — pragmatic default. Privoxy сам слушает http://, это работает как для http-, так и для https-URL.
+
+## Q: Nerd Font — почему перенесено из late_command в ansible?
+
+**Контекст:** install падал на `curl: (22) 404` при скачивании JetBrainsMono.tar.xz с GitHub. Причина — редирект release-asset на `release-assets.githubusercontent.com` иногда не работает из installer chroot.
+
+**Анализ:** Nerd Font — **cosmetic, не критичный**. Его отсутствие на первом boot'е — не блокер. Установка вполне может быть отложена. Но если падает в late_command с `set -e` — валит **весь** finish-install, что ломает установку.
+
+**Решение: перенос в ansible** (tag `nerd-font`). Что даёт:
+- Запускается на boot'нувшейся системе — легко ретраить при сбое
+- Падение одной задачи не валит весь pipeline
+- `--tags nerd-font` — селективный retry
+- Использует `ansible.builtin.uri` + `get_url` + `unarchive` — корректная обработка ошибок с retries
+
+**Общее правило** (теперь в CLAUDE.md §6): cosmetic/user-level шаги с external-download → в ansible, не в late_command.
+
 ## Ссылки
 
 - [Ansible overview](README.md)
 - [Applications](applications.md) — детали каждого приложения
 - [Bootstrap](../post-install/README.md) — как ansible запускается
+- [CLAUDE.md §6](../../CLAUDE.md) — правило робастности late_command
