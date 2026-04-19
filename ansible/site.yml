@@ -32,13 +32,14 @@
     # -----------------------------------------------------------------------
     # Apps from Debian main repository — simplest case
     # -----------------------------------------------------------------------
-    - name: Debian-repo apps (libreoffice meta)
+    - name: Debian-repo apps (libreoffice, pgcli)
       ansible.builtin.apt:
         name:
-          - libreoffice
+          - libreoffice          # офисный пакет
+          - pgcli                 # CLI PG-client с magic autocomplete (~30 MB RAM)
         state: present
         update_cache: true
-      tags: [debian-repo, libreoffice]
+      tags: [debian-repo, libreoffice, pgcli]
 
     # -----------------------------------------------------------------------
     # VS Code — Microsoft apt repo
@@ -72,39 +73,40 @@
       tags: [vscode]
 
     # -----------------------------------------------------------------------
-    # DBeaver CE — .deb с GitHub releases (более надёжно чем dbeaver.io
-    # который может давать TLS handshake timeout из ограниченных сетей).
-    # Asset naming: dbeaver-ce-<version>-linux-x86_64.deb
+    # DbGate — современный SQL-клиент (Electron, ~108 MB .deb).
+    # Поддерживает PG, MySQL, SQLite, Oracle, MongoDB, Redis, ClickHouse.
+    # Легче чем DBeaver (JVM), сравнимый по автодополнению.
+    # Asset naming: dbgate-<version>-linux_amd64.deb или dbgate-latest.deb
     # -----------------------------------------------------------------------
-    - name: DBeaver CE | query latest release
+    - name: DbGate | query latest release
       ansible.builtin.uri:
-        url: https://api.github.com/repos/dbeaver/dbeaver/releases/latest
+        url: https://api.github.com/repos/dbgate/dbgate/releases/latest
         return_content: true
-      register: dbeaver_release
-      tags: [dbeaver]
+      register: dbgate_release
+      tags: [dbgate]
 
-    - name: DBeaver CE | resolve linux-x86_64 .deb URL
+    - name: DbGate | resolve linux_amd64 .deb URL
       ansible.builtin.set_fact:
-        dbeaver_deb_url: >-
+        dbgate_deb_url: >-
           {{
-            dbeaver_release.json.assets
-            | selectattr('name', 'match', 'dbeaver-ce-.*-linux-x86_64\.deb$')
+            dbgate_release.json.assets
+            | selectattr('name', 'match', 'dbgate-[0-9].*-linux_amd64\.deb$')
             | map(attribute='browser_download_url')
             | first
           }}
-      tags: [dbeaver]
+      tags: [dbgate]
 
-    - name: DBeaver CE | download .deb
+    - name: DbGate | download .deb
       ansible.builtin.get_url:
-        url: "{{ dbeaver_deb_url }}"
-        dest: /tmp/dbeaver-ce.deb
+        url: "{{ dbgate_deb_url }}"
+        dest: /tmp/dbgate.deb
         mode: "0644"
-      tags: [dbeaver]
+      tags: [dbgate]
 
-    - name: DBeaver CE | install
+    - name: DbGate | install
       ansible.builtin.apt:
-        deb: /tmp/dbeaver-ce.deb
-      tags: [dbeaver]
+        deb: /tmp/dbgate.deb
+      tags: [dbgate]
 
     # -----------------------------------------------------------------------
     # Obsidian — latest .deb from GitHub releases
@@ -465,7 +467,7 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - /tmp/dbeaver-ce.deb
+        - /tmp/dbgate.deb
         - /tmp/obsidian.deb
         - /tmp/chezmoi.deb
         - /tmp/bruno.deb

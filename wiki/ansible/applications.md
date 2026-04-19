@@ -13,7 +13,8 @@ tags: [ansible, applications]
 | Приложение | Тег | Метод | Источник |
 |---|---|---|---|
 | [VS Code](#vs-code) | `vscode` | apt-репо | `packages.microsoft.com/repos/code` → `code` |
-| [DBeaver CE](#dbeaver-ce) | `dbeaver` | прямой `.deb` | `dbeaver.io/files/dbeaver-ce_latest_amd64.deb` |
+| [DbGate](#dbgate) | `dbgate` | прямой `.deb` | GitHub `dbgate/dbgate` (SQL-клиент Electron, 108 MB) |
+| [pgcli](#pgcli) | `pgcli` | Debian main | CLI PG-client с magic autocomplete |
 | [Obsidian](#obsidian) | `obsidian` | прямой `.deb` | GitHub `obsidianmd/obsidian-releases` |
 | [Bruno](#bruno) | `bruno` | прямой `.deb` | GitHub `usebruno/bruno` |
 | [Throne](#throne) | `throne` | прямой `.deb` | GitHub `throneproj/Throne` |
@@ -28,10 +29,26 @@ tags: [ansible, applications]
 Microsoft apt-репо. Ставим ключ в `/etc/apt/keyrings/microsoft.asc`, добавляем
 `deb [signed-by=...] .../repos/code stable main`, ставим пакет `code`.
 
-## DBeaver CE
+## DbGate
 
-Официальный `.deb`. Url не-версионный (`_latest_amd64.deb`), всегда
-перескачивается при ansible-прогоне.
+SQL-клиент на Electron (~108 MB `.deb`, ~250 MB RAM idle). Поддерживает PG,
+MySQL, SQLite, Oracle, MongoDB, Redis, ClickHouse. Легче чем DBeaver (JVM
+start ~5 сек vs Electron ~2 сек; RAM idle 250 MB vs 600 MB).
+
+Метод: GitHub releases `dbgate/dbgate` → asset `dbgate-<version>-linux_amd64.deb`.
+
+## pgcli
+
+CLI PG-клиент из Debian main. **Лучший autocomplete среди бесплатных**:
+знает таблицы, колонки с учётом JOIN aliases, keywords case-aware. Syntax
+highlighting, multi-line editor, `F9` history (fzy-search).
+
+```bash
+pgcli postgres://user@localhost/mydb
+```
+
+RAM ~30 MB. Primary PG-клиент для ad-hoc queries. DbGate — когда нужен
+GUI для browse/bulk-edit.
 
 ## Obsidian
 

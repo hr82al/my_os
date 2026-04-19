@@ -1,5 +1,89 @@
 # CLAUDE.md — project rules
 
+## 📐 Принципы проекта (во главу угла)
+
+### 1. Экономия RAM в runtime — приоритет
+
+Система используется на USB SSD (variant B, см. [preseed-usb.txt](preseed/preseed-usb.txt))
+и при ограниченных ресурсах. **RAM в работе важнее чем disk install size.**
+
+При выборе между несколькими пакетами/альтернативами — учитывать idle/active RAM.
+
+**Порядок предпочтений (лёгкое → тяжёлое):**
+1. CLI-утилита (pgcli, ncdu, htop) — `< 50 MB`
+2. Native GUI (kitty, Telegram Qt) — `50-150 MB`
+3. Native toolkit GUI (GIMP GTK, Inkscape) — `150-400 MB`
+4. Electron app (VS Code, DBeaver, Obsidian, Chrome) — `200-800 MB each`
+5. JVM-based (DBeaver, DataGrip, IntelliJ) — `400-1500 MB each`
+
+**Правила при добавлении нового пакета:**
+- Если есть native/CLI эквивалент (даже менее «красивый») — оформить как **primary вариант**
+- Electron/JVM-тяжеловесы — только когда реально нужны фичи, не «на всякий случай»
+- Background-демоны — только если реальная польза; `systemctl --user` предпочтительнее system
+- Пример выбора: для SQL — сначала `pgcli`, только потом DBeaver (`--tags pgcli` всегда в bootstrap, DBeaver optional)
+
+При обсуждении альтернатив — **явно показать числа** RAM idle/working set
+(через `ps_mem` или `smem`), не полагаться на ощущения.
+
+### 2. Не использовать Snap / Flatpak
+
+**Все приложения — натив** (apt, upstream .deb, tarball в `/opt`, AppImage в
+`/opt/` как последняя опция).
+
+**Почему:**
+- Snap/Flatpak = контейнеризованный runtime → **+300-700 MB оперативы на sandbox-libs** при работе приложения
+- Duplication библиотек (свой Qt/GTK в каждом Flatpak)
+- Файловые integration limitations (MIME handlers, theme mismatch, keyring access)
+- Авто-запуск snapd/flatpakd даёт baseline RAM overhead
+
+**Правило при выборе источника установки:**
+
+| Источник | Приоритет | Когда использовать |
+|---|---|---|
+| Debian `main` / `contrib` | 🟢 **Первый** | Пакет есть в стандартной трилогии, версия приемлема |
+| Upstream apt-репо | 🟢 | docker-ce, google-chrome, VS Code (версии актуальные, GPG-key) |
+| Прямой `.deb` с официального / GitHub release | 🟡 | Obsidian, Bruno, Throne, DBeaver |
+| `tarball` → `/opt/` + symlink + .desktop | 🟡 | Postman, Telegram (нет .deb) |
+| `AppImage` в `/opt/` | 🟠 | Redis Insight (нет .deb, нет tarball) |
+| **Snap** | 🔴 **НЕ ИСПОЛЬЗОВАТЬ** | — |
+| **Flatpak** | 🔴 **НЕ ИСПОЛЬЗОВАТЬ** | — |
+
+**Исключение для Snap/Flatpak:** только если нужна конкретная функциональность
+которая **физически недоступна** через другие каналы AND есть чёткое обоснование.
+Требует явного коммит-месседжа «Почему snap/flatpak ЗДЕСЬ».
+
+### 3. Preseed заморожен — система успешно установлена
+
+Дата первой успешной установки: **2026-04-19** (variant B, USB SSD).
+
+С этого момента **НЕ ТРОГАТЬ `preseed/*.txt`** без явной необходимости. Все
+новые фичи идут в другие слои:
+
+| Задача | Куда |
+|---|---|
+| Новый пакет для workflow | `ansible/site.yml` (tag приложения) |
+| Конфиг системы (privoxy, sysctl, systemd-unit) | `ansible/site.yml` |
+| User-script в ~/.local/bin | `ansible/files/` + copy-task |
+| Dotfiles (~/.bashrc, ~/.config/) | **chezmoi** (когда создан repo) |
+| Документация | `wiki/` + `decisions.md` |
+
+**Когда можно трогать preseed:**
+- Критичный install-blocking баг (падение pkgsel, partman, late_command)
+- Смена целевого железа (новый диск, другая архитектура)
+- Обновление Debian major version (trixie → bookworm+2)
+
+**Когда НЕЛЬЗЯ трогать preseed:**
+- Добавить новое приложение → ansible
+- Поменять конфиг сервиса → ansible
+- Исправить typo в комментарии → ansible (не требует переустановки)
+- Изменить автологин / сессию WM → ansible (идемпотентно, применяется без переустановки)
+
+Если меняешь preseed — **объяснить зачем** в commit-message и обновить
+соответствующий `decisions.md`. Потом flash sync + **переустановить систему**
+для проверки (дорого — делать только когда вынужденно).
+
+---
+
 ## Всегда валидировать изменения в install-pipeline
 
 Перед коммитом правок в `preseed/*.txt` или `ansible/site.yml` — прогнать три проверки через Debian-13 docker (локально на Fedora `debconf-set-selections` и `ansible-playbook` недоступны).

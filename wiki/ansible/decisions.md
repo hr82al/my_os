@@ -165,9 +165,39 @@ systemctl enable --now privoxy
 
 **Общее правило** (теперь в CLAUDE.md §6): cosmetic/user-level шаги с external-download → в ansible, не в late_command.
 
+## Q: DBeaver vs DbGate vs pgcli — что выбрать для PG?
+
+**Контекст:** первоначальный выбор был DBeaver CE. Проблемы:
+- JVM startup ~5 сек
+- RAM idle 400-600 MB
+- Editor / autocomplete на среднем уровне (жалобы пользователя)
+- TLS-timeout при скачивании с `dbeaver.io` из ограниченных сетей
+
+**Критерий (из [CLAUDE.md §1](../../CLAUDE.md)):** экономия RAM runtime приоритетнее disk size.
+
+**Варианты:**
+
+| | DBeaver CE | DbGate | pgcli | IntelliJ IDEA + DB plugin |
+|---|---|---|---|---|
+| Тип | GUI (JVM/Eclipse) | GUI (Electron) | CLI (Python) | GUI (JVM) |
+| RAM idle | 400-600 MB | ~250 MB | ~30 MB | 600-1000 MB |
+| Startup | ~5s | ~2s | <1s | ~8s |
+| Autocomplete | Средний (schema introspection) | Средний | **Отличный** (magic) | **Gold standard** |
+| Download reliability | dbeaver.io TLS глюки | GitHub CDN OK | Debian main OK | requires JetBrains tooling |
+| Поддерживает | ~80 DBs | ~15 DBs | PG only | ~60 DBs |
+
+**Решение:** 
+- **pgcli** как primary (CLI, лучший autocomplete бесплатно, 30 MB RAM)
+- **DbGate** как GUI-замена DBeaver (легче, быстрее, сравнимое автодополнение)
+- **DBeaver убран** — ни одного преимущества которое оправдывает 400+ MB JVM overhead
+- **IntelliJ IDEA Community + DB plugin** — упоминается в документации как «если autocomplete критичен», но не в default bootstrap (1 GB RAM)
+
+**Паттерн выбора для других категорий в будущем:** соблюдать иерархию из [CLAUDE.md §1](../../CLAUDE.md) — сначала CLI, потом native GUI, потом Electron, только потом JVM.
+
 ## Ссылки
 
 - [Ansible overview](README.md)
 - [Applications](applications.md) — детали каждого приложения
 - [Bootstrap](../post-install/README.md) — как ansible запускается
+- [CLAUDE.md §1](../../CLAUDE.md) — правило экономии RAM
 - [CLAUDE.md §6](../../CLAUDE.md) — правило робастности late_command
