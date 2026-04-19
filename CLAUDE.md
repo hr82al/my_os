@@ -388,6 +388,90 @@ Error while resolving value for 'xxx_deb_url': No first item, sequence was empty
 - `bruno_<v>_amd64.deb` → `bruno_<v>_amd64_linux.deb` (добавили `_linux` перед `.deb`)
 - Redis Insight: `/latest/RedisInsight-*` → `/latest-v3/Redis-Insight-*` (split в имени)
 
+### 11. Паттерн альтернативных источников для «рискованных» downloads
+
+Некоторые URL **стабильно блокируются** из определённых сетей (DPI/ISP):
+- `telegram.org` — часто заблокирован в РФ провайдерами (`Errno 101 Network is unreachable`)
+- `dbeaver.io` — TLS timeout (перешли на GitHub releases)
+- Vendor CDN в момент glitch дают 404
+
+**Правило:** для таких задач используем **fallback-цепочку** с 3-4 альтернативными источниками + `block/rescue` для non-fatal failure:
+
+```yaml
+- name: <App> | install
+  vars:
+    # Путь по умолчанию где пользователь может pre-download положить
+    app_local_path: /home/user/Downloads/offline/app.tar.xz
+    # URL можно переопределить через -e app_url=...
+    app_url: "{{ app_url | default('https://vendor.com/download') }}"
+  block:
+    - name: App | check pre-downloaded file
+      ansible.builtin.stat:
+        path: "{{ app_local_path }}"
+      register: app_local
+
+    - name: App | use pre-downloaded tarball
+      ansible.builtin.copy:
+        src: "{{ app_local_path }}"
+        dest: /tmp/app.tar.xz
+        remote_src: true
+      when: app_local.stat.exists
+
+    - name: App | download (fallback)
+      ansible.builtin.get_url:
+        url: "{{ app_url }}"
+        dest: /tmp/app.tar.xz
+      when: not app_local.stat.exists
+
+    # ... остальные шаги (extract, symlink, .desktop) ...
+  rescue:
+    - ansible.builtin.debug:
+        msg: |
+          ⚠️ App install failed. Альтернативы:
+          1. Pre-download: ~/Downloads/offline/app.tar.xz
+          2. Proxy: -e use_proxy=true (после настройки throne)
+          3. Local HTTP: python3 -m http.server + -e app_url=http://...
+          4. rclone: rclone copy remote:offline-apps/ ~/Downloads/offline/
+  tags: [app]
+```
+
+### Fallback-цепочка порядка проверки
+
+Для каждого рискованного приложения:
+
+1. **Pre-downloaded local file** (`~/Downloads/offline/<app>.tar.xz`)
+   - Пользователь заранее скачал на dev-машине (где работает VPN)
+   - Перенёс на целевую машину (rsync/USB/rclone)
+   - Если есть — используется без network запроса
+2. **Direct URL** (через privoxy если `use_proxy=true`)
+   - Через throne → SOCKS5 → external сайт
+3. **Overridable URL** (через `-e <app>_url=...`)
+   - User запускает свой HTTP-server локально
+   - Или указывает другой mirror
+4. **Fallback: rescue + warning**
+   - Весь play продолжается, печатается инструкция
+
+### Признаки что apply этот паттерн
+
+- Vendor-specific CDN (не GitHub Releases) — `telegram.org`, `*.amazonaws.com/redis-insight.*`, `dl.pstmn.io`
+- Сайты из geoблокировок (РФ, Китай, Иран и т.п.)
+- Cosmetic/non-essential (fonts, AppImage)
+
+### НЕ оборачивать в rescue
+
+- Apt из Debian main (обязательное для системы)
+- `docker.com` / `packages.microsoft.com` (должны работать всегда)
+- GitHub releases (обычно надёжно; retry через `-e use_proxy=true` если timeout)
+
+### Симптомы network-failure
+
+| Ошибка | Уровень | Причина |
+|---|---|---|
+| `Errno 101 Network is unreachable` | route / firewall | DNS работает, но route блокирован (DPI) |
+| `urlopen error _ssl.c:1012: handshake timed out` | TLS | DPI sniffs TLS, drops connections |
+| HTTP 403/404 от vendor CDN (не GitHub) | HTTP | URL-rot или геоблок API |
+| `Connection refused` | local | privoxy/throne не запущены
+
 Симптом в syslog который означает «late_command сломал installer»:
 ```
 finish-install: /bin/preseed_command: return: line 88: Illegal number:

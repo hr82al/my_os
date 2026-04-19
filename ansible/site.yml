@@ -272,46 +272,101 @@
       tags: [throne]
 
     # -----------------------------------------------------------------------
-    # Telegram Desktop — tarball into /opt (нет в Debian main, только
-    # сторонние пакеты/Flatpak). Официальная сборка с telegram.org.
+    # Telegram Desktop — tarball into /opt.
+    # Primary source: GitHub releases `telegramdesktop/tdesktop` — asset
+    # `tsetup.<version>.tar.xz` (те же самые официальные сборки что на
+    # telegram.org). GitHub reliably доступен где telegram.org заблокирован.
+    # Fallback: pre-downloaded ~/Downloads/offline/telegram.tar.xz
+    # (для случая если и GitHub недоступен — редко).
     # -----------------------------------------------------------------------
-    - name: Telegram | download tarball
-      ansible.builtin.get_url:
-        url: https://telegram.org/dl/desktop/linux
-        dest: /tmp/telegram.tar.xz
-        mode: "0644"
-      tags: [telegram]
+    - name: Telegram | install
+      vars:
+        telegram_local_path: /home/user/Downloads/offline/telegram.tar.xz
+      block:
+        - name: Telegram | check for pre-downloaded tarball
+          ansible.builtin.stat:
+            path: "{{ telegram_local_path }}"
+          register: telegram_local
 
-    - name: Telegram | extract to /opt
-      ansible.builtin.unarchive:
-        src: /tmp/telegram.tar.xz
-        dest: /opt
-        remote_src: true
-        creates: /opt/Telegram/Telegram
-      tags: [telegram]
+        - name: Telegram | use pre-downloaded tarball (если есть)
+          ansible.builtin.copy:
+            src: "{{ telegram_local_path }}"
+            dest: /tmp/telegram.tar.xz
+            mode: "0644"
+            remote_src: true
+          when: telegram_local.stat.exists
 
-    - name: Telegram | symlink to /usr/local/bin
-      ansible.builtin.file:
-        src: /opt/Telegram/Telegram
-        dest: /usr/local/bin/telegram-desktop
-        state: link
-      tags: [telegram]
+        - name: Telegram | query latest GitHub release
+          ansible.builtin.uri:
+            url: https://api.github.com/repos/telegramdesktop/tdesktop/releases/latest
+            return_content: true
+          register: telegram_release
+          when: not telegram_local.stat.exists
 
-    - name: Telegram | desktop entry
-      ansible.builtin.copy:
-        dest: /usr/share/applications/telegram-desktop.desktop
-        mode: "0644"
-        content: |
-          [Desktop Entry]
-          Name=Telegram Desktop
-          Comment=Official messaging app
-          Exec=/opt/Telegram/Telegram -- %u
-          Icon=telegram
-          Terminal=false
-          Type=Application
-          Categories=Network;InstantMessaging;Qt;
-          MimeType=x-scheme-handler/tg;
-          StartupWMClass=TelegramDesktop
+        - name: Telegram | resolve tsetup.tar.xz URL
+          ansible.builtin.set_fact:
+            telegram_tar_url: >-
+              {{
+                telegram_release.json.assets
+                | selectattr('name', 'match', 'tsetup\.[0-9.]+\.tar\.xz$')
+                | map(attribute='browser_download_url')
+                | first
+              }}
+          when: not telegram_local.stat.exists
+
+        - name: Telegram | download from GitHub
+          ansible.builtin.get_url:
+            url: "{{ telegram_tar_url }}"
+            dest: /tmp/telegram.tar.xz
+            mode: "0644"
+          when: not telegram_local.stat.exists
+
+        - name: Telegram | extract to /opt
+          ansible.builtin.unarchive:
+            src: /tmp/telegram.tar.xz
+            dest: /opt
+            remote_src: true
+            creates: /opt/Telegram/Telegram
+
+        - name: Telegram | symlink to /usr/local/bin
+          ansible.builtin.file:
+            src: /opt/Telegram/Telegram
+            dest: /usr/local/bin/telegram-desktop
+            state: link
+
+        - name: Telegram | desktop entry
+          ansible.builtin.copy:
+            dest: /usr/share/applications/telegram-desktop.desktop
+            mode: "0644"
+            content: |
+              [Desktop Entry]
+              Name=Telegram Desktop
+              Comment=Official messaging app
+              Exec=/opt/Telegram/Telegram -- %u
+              Icon=telegram
+              Terminal=false
+              Type=Application
+              Categories=Network;InstantMessaging;Qt;
+              MimeType=x-scheme-handler/tg;
+              StartupWMClass=TelegramDesktop
+      rescue:
+        - name: Telegram | install failed — warn & continue
+          ansible.builtin.debug:
+            msg: |
+              ⚠️  Telegram install failed. Альтернативы:
+
+              1. Проверить что GitHub доступен:
+                   curl -I https://github.com/telegramdesktop/tdesktop/releases/latest
+
+              2. Pre-download на dev-машине:
+                   curl -L -o ~/Downloads/offline/telegram.tar.xz \
+                     $(curl -s https://api.github.com/repos/telegramdesktop/tdesktop/releases/latest \
+                       | jq -r '.assets[] | select(.name | test("tsetup\\.[0-9.]+\\.tar\\.xz$")) | .browser_download_url')
+                   # перенести ~/Downloads/offline/ на целевую машину, повторить:
+                   sudo ansible-playbook ... --tags telegram
+
+              3. После настройки throne + privoxy:
+                   sudo ansible-playbook ... --tags telegram -e use_proxy=true
       tags: [telegram]
 
     # -----------------------------------------------------------------------
