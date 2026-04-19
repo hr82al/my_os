@@ -172,6 +172,99 @@ Exit code не пропагируется, но логируется для post
 4. Что произойдёт если упадёт? Inst.-blocking или degraded?
 5. Есть ли exit code propagation через `|| true` где нужно?
 
+### 7. Тестировать внешние URLs регулярно (URL-rot)
+
+⚠️ **URL сервисов меняются со временем** (ребрендинг, переезд на CDN, smartversioning).
+Случаи:
+- **Redis Insight:** `/latest/RedisInsight-*` → `/latest-v3/Redis-Insight-*` (смена имени + пути)
+- **GitHub asset downloads:** иногда redirect на `release-assets.githubusercontent.com` даёт 404 из определённых сетей
+- **dbeaver.io:** TLS handshake timeout из ограниченных сетей — надо через privoxy
+
+Перед commit'ом — **проверить ВСЕ URL которые используются** в ansible
+(`uri`, `get_url`) и preseed (curl):
+```bash
+for url in \
+    "https://dbeaver.io/files/dbeaver-ce_latest_amd64.deb" \
+    "https://telegram.org/dl/desktop/linux" \
+    "https://s3.amazonaws.com/redisinsight.download/public/latest-v3/Redis-Insight-linux-x86_64.AppImage" \
+    # ... все остальные
+do
+    code=$(curl -sLI -o /dev/null -w "%{http_code}" --max-time 10 "$url")
+    [ "$code" = "200" ] && echo "✅ $code $url" || echo "❌ $code $url"
+done
+```
+
+Если какой-то URL возвращает 403 / 404 / timeout:
+1. Искать замену на официальной странице (например redis.io/downloads/)
+2. Обновить ansible/preseed
+3. Добавить в wiki decisions.md запись об изменении
+
+### 8. Ansible: circular dependency с privoxy
+
+Пользователь использует **privoxy на 127.0.0.1:8118** как HTTP→SOCKS5 мост
+к **throne** (SOCKS5 на 127.0.0.1:2080). Это даёт доступ к сайтам с
+ограничениями.
+
+⚠️ **НЕ использовать privoxy по умолчанию в ansible**, потому что:
+- `throne` устанавливается первым запуском ansible
+- После install throne **пользователь должен вручную** залогиниться в GUI и настроить subscription → SOCKS5 начнёт слушать на 2080
+- Если ansible ставит privoxy в `HTTPS_PROXY` **до** настройки throne — `get_url` висит на connection refused к 127.0.0.1:2080
+- **Порядок:** preseed → throne-package installed (не настроен) → bootstrap ansible без proxy → **user настраивает throne** → ansible с `-e use_proxy=true` для рестаксов где нужна прокси
+
+**В `site.yml`:**
+```yaml
+environment:
+  HTTPS_PROXY: "{{ (use_proxy | default(false) | bool) | ternary('http://127.0.0.1:8118', '') }}"
+  HTTP_PROXY:  "{{ (use_proxy | default(false) | bool) | ternary('http://127.0.0.1:8118', '') }}"
+  NO_PROXY: "localhost,127.0.0.1,::1,.local"
+```
+Default — **false** (не использовать). Включить: `-e use_proxy=true`.
+
+**Alternative — обход прокси:** если URL падает на TLS handshake из
+ограниченной сети — найти более надёжный endpoint (GitHub releases вместо
+vendor CDN, например `dbeaver.io` → github.com/dbeaver/dbeaver).
+
+**Симптом TLS handshake timeout:**
+```
+Module failed: Request failed: <urlopen error _ssl.c:1012: The handshake operation timed out>
+```
+→ искать альтернативный URL (обычно GitHub API → releases asset), не надеяться на proxy.
+
+**Таймауты** в `module_defaults` play-уровня:
+```yaml
+module_defaults:
+  ansible.builtin.get_url:
+    timeout: 60           # default 10s мало для больших .deb/tarball
+  ansible.builtin.uri:
+    timeout: 30           # API-запросы к GitHub
+```
+
+### 9. Тестировать перед коммитом (URL + packages + syntax)
+
+Перед любой правкой ansible/site.yml или preseed/*.txt:
+```bash
+# 1. syntax preseed
+for f in preseed.txt preseed-usb.txt; do
+    docker run --rm -v $PWD/preseed:/p debian:13 bash -c \
+        "apt-get install -y debconf >/dev/null 2>&1 && debconf-set-selections --checkonly /p/$f"
+done
+
+# 2. syntax ansible
+docker run --rm -v $PWD/ansible:/a debian:13 bash -c \
+    'apt-get update -qq && apt-get install -y --no-install-recommends ansible >/dev/null 2>&1 && cd /a && ansible-playbook -i inventory.ini site.yml --syntax-check'
+
+# 3. ALL URLs used in ansible + preseed — все должны быть 200
+for url in $(grep -hoE 'https?://[^[:space:]"]*' ansible/site.yml preseed/*.txt | sort -u | grep -v example\\.com); do
+    code=$(curl -sLI -o /dev/null -w "%{http_code}" --max-time 10 "$url")
+    [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ] && echo "✅ $code $url" || echo "❌ $code $url"
+done
+
+# 4. ALL packages in pkgsel — валидировать через apt-get install --simulate
+# (см. §3 выше)
+```
+
+Если URL возвращает не-2xx — искать замену до коммита, не после install'а.
+
 Симптом в syslog который означает «late_command сломал installer»:
 ```
 finish-install: /bin/preseed_command: return: line 88: Illegal number:

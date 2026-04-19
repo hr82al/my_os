@@ -10,6 +10,23 @@
   become: true
   gather_facts: true
 
+  # Опционально — маршрутизация внешних downloads через privoxy (HTTP→SOCKS5
+  # на 127.0.0.1:2080). По умолчанию ВЫКЛ: требует настроенного throne со
+  # subscription. Включить: `ansible-playbook ... -e use_proxy=true` ПОСЛЕ
+  # настройки throne (`./bootstrap.sh ansible --tags privoxy` + настройка throne).
+  environment:
+    HTTPS_PROXY: "{{ (use_proxy | default(false) | bool) | ternary('http://127.0.0.1:8118', '') }}"
+    HTTP_PROXY:  "{{ (use_proxy | default(false) | bool) | ternary('http://127.0.0.1:8118', '') }}"
+    NO_PROXY: "localhost,127.0.0.1,::1,.local"
+
+  # Больший таймаут на сетевые модули: дефолтные 10s мало для крупных
+  # .deb/tarball/AppImage и медленных соединений.
+  module_defaults:
+    ansible.builtin.get_url:
+      timeout: 60
+    ansible.builtin.uri:
+      timeout: 30
+
   tasks:
 
     # -----------------------------------------------------------------------
@@ -55,14 +72,33 @@
       tags: [vscode]
 
     # -----------------------------------------------------------------------
-    # DBeaver CE — direct .deb
+    # DBeaver CE — .deb с GitHub releases (более надёжно чем dbeaver.io
+    # который может давать TLS handshake timeout из ограниченных сетей).
+    # Asset naming: dbeaver-ce-<version>-linux-x86_64.deb
     # -----------------------------------------------------------------------
-    - name: DBeaver CE | download latest .deb
+    - name: DBeaver CE | query latest release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/dbeaver/dbeaver/releases/latest
+        return_content: true
+      register: dbeaver_release
+      tags: [dbeaver]
+
+    - name: DBeaver CE | resolve linux-x86_64 .deb URL
+      ansible.builtin.set_fact:
+        dbeaver_deb_url: >-
+          {{
+            dbeaver_release.json.assets
+            | selectattr('name', 'match', 'dbeaver-ce-.*-linux-x86_64\.deb$')
+            | map(attribute='browser_download_url')
+            | first
+          }}
+      tags: [dbeaver]
+
+    - name: DBeaver CE | download .deb
       ansible.builtin.get_url:
-        url: https://dbeaver.io/files/dbeaver-ce_latest_amd64.deb
+        url: "{{ dbeaver_deb_url }}"
         dest: /tmp/dbeaver-ce.deb
         mode: "0644"
-        force: true
       tags: [dbeaver]
 
     - name: DBeaver CE | install
@@ -329,8 +365,10 @@
       tags: [with-proxy, user-bashrc, privoxy]
 
     # -----------------------------------------------------------------------
-    # Privoxy — HTTP→SOCKS5 bridge (user runs SOCKS5 on 127.0.0.1:2080)
-    # Package itself is installed by preseed; here we configure + enable.
+    # Privoxy — HTTP→SOCKS5 мост для локального SOCKS5 (throne на 127.0.0.1:2080).
+    # Сама конфигурация + enable — здесь. Но использовать privoxy в ansible как
+    # HTTPS_PROXY можно только ПОСЛЕ настройки throne (подписка, login).
+    # См. play-уровень `environment` + флаг `-e use_proxy=true`.
     # -----------------------------------------------------------------------
     - name: Privoxy | forward-socks5 to 127.0.0.1:2080
       ansible.builtin.lineinfile:
