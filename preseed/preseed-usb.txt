@@ -368,11 +368,10 @@ d-i apt-setup/cdrom/set-first boolean false
 d-i apt-setup/non-free-firmware boolean true
 d-i apt-setup/non-free boolean true
 d-i apt-setup/contrib boolean true
-# Uncomment the following line, if you don't want to have the sources.list
-# entry for a DVD/BD installation image active in the installed system
-# (entries for netinst or CD images will be disabled anyway, regardless of
-# this setting).
-#d-i apt-setup/disable-cdrom-entries boolean true
+# Disable the DVD cdrom: entry in the installed system's sources.list.
+# Otherwise `apt-get update` in late_command hangs waiting for the DVD which
+# is no longer available after the installer finishes.
+d-i apt-setup/disable-cdrom-entries boolean true
 # Force network mirror usage even on DVD installs — default is false for DVD,
 # which caused pkgsel to fail because many packages (qtile, ansible, snapper,
 # rclone, etc.) aren't on DVD-1 and need the main repo.
@@ -565,6 +564,10 @@ d-i preseed/late_command string \
       '#!/bin/sh' \
       'set -eux' \
       'exec >/target/var/log/late-install.log 2>&1' \
+      '' \
+      '# --- Belt-and-suspenders: drop cdrom: entry — otherwise apt-get update' \
+      '#     below hangs waiting for the DVD which is no longer available. ---' \
+      'sed -i "/^deb cdrom:/d" /target/etc/apt/sources.list' \
       '' \
       '# --- Fallback apt mirror (deb.debian.org) — kicks in if primary' \
       '#     mirror.mephi.ru goes down. apt tries both sources. ---' \

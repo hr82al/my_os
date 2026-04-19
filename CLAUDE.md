@@ -61,6 +61,31 @@ apt-setup: warning: /usr/lib/apt-setup/generators/50mirror returned error code 1
 ```
 «discarding output» = скрипт вышел с 1 потому что use_mirror=false — это **ожидаемое** поведение при отсутствии настройки, не реальная ошибка сети.
 
+### 5. DVD-installer оставляет `deb cdrom:` запись — отключать
+
+После DVD-install'а `/etc/apt/sources.list` содержит строку вида:
+```
+deb cdrom:[Debian GNU/Linux 13.4.0 _Trixie_...]/ trixie contrib main non-free-firmware
+```
+Если в `late_command` выполнить `apt-get update` (например при добавлении docker-ce upstream-репо), apt пытается прочитать DVD, **которого уже нет** — команда виснет бесконечно. В итоге «Finish installation» в конце инсталлятора не отвечает.
+
+Обязательно:
+```
+d-i apt-setup/disable-cdrom-entries boolean true
+```
+
+И belt-and-suspenders в late_command перед первым `apt-get update`:
+```sh
+sed -i "/^deb cdrom:/d" /target/etc/apt/sources.list
+```
+
+Симптом в `/var/log/late-install.log` на установленной системе:
+```
++ echo 'deb [...] > /target/etc/apt/sources.list.d/docker.list'
++ in-target apt-get update
+<< лог обрывается здесь >>
+```
+
 При обнаружении отсутствующего пакета: либо найти новое имя (часто `*-1` → `*d`,
 или `lib…1` → `lib…1t64` и т.п.), либо вынести установку в `ansible/site.yml`
 по паттерну Bruno/Obsidian: `uri` для latest release → `get_url` для `.deb` →
