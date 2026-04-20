@@ -259,9 +259,30 @@
       tags: [bruno]
 
     # -----------------------------------------------------------------------
-    # Throne — SOCKS5/VPN proxy client; .deb from GitHub releases
+    # Throne — SOCKS5/VPN proxy client; portable zip в ~/mr/apps/Throne.
     # Provides the local SOCKS5 on 127.0.0.1:2080 which privoxy wraps.
+    #
+    # Почему zip а не .deb: upstream .deb кладёт файлы в /opt/Throne и запускает
+    # postinst-скрипты; portable zip — просто распаковка в user home, config/
+    # рядом с бинарём пишется самим приложением (без root), проще обновлять
+    # (снести папку и распаковать новую версию).
+    # Asset naming: Throne-<version>-linux-amd64.zip (top-level dir `Throne/`).
     # -----------------------------------------------------------------------
+    - name: Throne | ensure unzip is installed (required for unarchive .zip)
+      ansible.builtin.apt:
+        name: unzip
+        state: present
+      tags: [throne]
+
+    - name: Throne | ensure ~/mr/apps exists (owner user)
+      ansible.builtin.file:
+        path: /home/user/mr/apps
+        state: directory
+        owner: user
+        group: user
+        mode: "0755"
+      tags: [throne]
+
     - name: Throne | query latest release
       ansible.builtin.uri:
         url: https://api.github.com/repos/throneproj/Throne/releases/latest
@@ -269,34 +290,64 @@
       register: throne_release
       tags: [throne]
 
-    - name: Throne | resolve amd64 .deb URL
+    - name: Throne | resolve linux-amd64.zip URL
       ansible.builtin.set_fact:
-        throne_deb_url: >-
+        throne_zip_url: >-
           {{
             throne_release.json.assets
-            | selectattr('name', 'match', '.*amd64\.deb$')
+            | selectattr('name', 'match', 'Throne-.*-linux-amd64\.zip$')
             | map(attribute='browser_download_url')
             | first
           }}
       tags: [throne]
 
-    - name: Throne | download .deb
+    - name: Throne | download zip
       ansible.builtin.get_url:
-        url: "{{ throne_deb_url }}"
-        dest: /tmp/throne.deb
+        url: "{{ throne_zip_url }}"
+        dest: /tmp/throne.zip
         mode: "0644"
       tags: [throne]
 
-    - name: Throne | install
-      ansible.builtin.apt:
-        deb: /tmp/throne.deb
+    - name: Throne | extract to ~/mr/apps (creates Throne/ subdir)
+      ansible.builtin.unarchive:
+        src: /tmp/throne.zip
+        dest: /home/user/mr/apps
+        remote_src: true
+        owner: user
+        group: user
+        # Не ставим `creates:` — нужно перезаписывать при апдейте версии.
+      tags: [throne]
+
+    - name: Throne | ensure extracted tree owned by user
+      ansible.builtin.file:
+        path: /home/user/mr/apps/Throne
+        state: directory
+        owner: user
+        group: user
+        recurse: true
       tags: [throne]
 
     - name: Throne | symlink to /usr/local/bin/throne (для терминала)
       ansible.builtin.file:
-        src: /opt/Throne/Throne
+        src: /home/user/mr/apps/Throne/Throne
         dest: /usr/local/bin/throne
         state: link
+      tags: [throne]
+
+    - name: Throne | desktop entry
+      ansible.builtin.copy:
+        dest: /usr/share/applications/throne.desktop
+        mode: "0644"
+        content: |
+          [Desktop Entry]
+          Name=Throne
+          Comment=SOCKS5/VPN proxy client
+          Exec=/home/user/mr/apps/Throne/Throne
+          Icon=/home/user/mr/apps/Throne/Throne.png
+          Terminal=false
+          Type=Application
+          Categories=Network;
+          StartupWMClass=Throne
       tags: [throne]
 
     # -----------------------------------------------------------------------
@@ -584,7 +635,7 @@
         - /tmp/obsidian.deb
         - /tmp/chezmoi.deb
         - /tmp/bruno.deb
-        - /tmp/throne.deb
+        - /tmp/throne.zip
         - /tmp/postman.tar.gz
         - /tmp/telegram.tar.xz
         - /tmp/JetBrainsMono-Nerd.tar.xz

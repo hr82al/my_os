@@ -17,7 +17,7 @@ tags: [ansible, applications]
 | [pgcli](#pgcli) | `pgcli` | Debian main | CLI PG-client с magic autocomplete |
 | [Obsidian](#obsidian) | `obsidian` | прямой `.deb` | GitHub `obsidianmd/obsidian-releases` |
 | [Bruno](#bruno) | `bruno` | прямой `.deb` | GitHub `usebruno/bruno` |
-| [Throne](#throne) | `throne` | прямой `.deb` | GitHub `throneproj/Throne` |
+| [Throne](#throne) | `throne` | portable zip → `~/mr/apps/Throne` | GitHub `throneproj/Throne` |
 | [chezmoi](#chezmoi) | `chezmoi` | прямой `.deb` | GitHub `twpayne/chezmoi` |
 | [LibreOffice](#libreoffice) (full) | `libreoffice` | Debian main | `libreoffice` |
 | [Telegram](#telegram) | `telegram` | Debian main | `telegram-desktop` |
@@ -63,7 +63,21 @@ Latest release через GitHub API → parse `.deb` asset → download → `ap
 Клиент SOCKS5/VPN (на sing-box). Предоставляет локальный SOCKS5 на
 `127.0.0.1:2080`, на который указывает [privoxy](README.md#privoxy-httpsocks5-мост).
 
-Метод: GitHub releases → `.deb`.
+Метод: GitHub releases → `Throne-<ver>-linux-amd64.zip` → распаковка в
+`/home/user/mr/apps/Throne/` (portable). Ansible:
+
+- `uri` → latest release
+- `get_url` → `/tmp/throne.zip`
+- `apt: unzip` (требуется для `unarchive` .zip)
+- `unarchive` → `/home/user/mr/apps/` (создаёт `Throne/` subdir)
+- `chown -R user:user` на распакованное дерево
+- symlink `/home/user/mr/apps/Throne/Throne` → `/usr/local/bin/throne`
+- `.desktop` entry (`Exec=/home/user/mr/apps/Throne/Throne`, `Icon=.../Throne.png`)
+
+Почему portable zip, а не `.deb` (см. [decisions](decisions.md#q-throne--почему-portable-zip-а-не-deb)):
+- config хранится рядом с бинарём (`Throne/config/`), не под `/etc`
+- обновление — снести `~/mr/apps/Throne` и распаковать новую версию
+- нет postinst/prerm, меньше риска сломать установку
 
 ## chezmoi
 

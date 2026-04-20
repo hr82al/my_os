@@ -248,7 +248,7 @@ rofi) работает.
 ```
 
 **Список приложений где это применено:**
-- Throne → `/usr/local/bin/throne`
+- Throne → `/usr/local/bin/throne` (source: `/home/user/mr/apps/Throne/Throne`, portable zip)
 - Obsidian → `/usr/local/bin/obsidian`
 - Bruno → `/usr/local/bin/bruno`
 - DbGate → `/usr/local/bin/dbgate`
@@ -258,6 +258,39 @@ rofi) работает.
 - `chezmoi`, `code` (VS Code), `pgcli`, `libreoffice` — сами создают `/usr/bin/`
 
 Правило в [CLAUDE.md §12](../../CLAUDE.md).
+
+## Q: Throne — почему portable zip, а не .deb?
+
+**Контекст:** раньше ansible качал `Throne-*-amd64.deb` с GitHub releases и
+ставил через `apt: deb:`. Пользователь уже использует portable zip на dev-машине
+(распакованный в `~/mr/apps/Throne`) и просит сделать так же в ansible.
+
+**Обсудили:**
+
+| Аспект | `.deb` | portable zip |
+|---|---|---|
+| Путь бинаря | `/opt/Throne/Throne` (root-only) | `~/mr/apps/Throne/Throne` (user-owned) |
+| Config | пишется в `~/.config/Throne` | рядом с бинарём (`Throne/config/`) |
+| Обновление | `dpkg -i new.deb` | `rm -rf ~/mr/apps/Throne && unzip new.zip -d ~/mr/apps` |
+| Postinst-риск | есть (ставит systemd-unit в некоторых версиях) | нет |
+| Совместимость с существующим config | ⚠️ разные пути config-файла | ✅ user уже работает в portable-схеме |
+| Размер | ~27 MB `.deb` | ~59 MB `.zip` (не сжат) |
+| Root-права для установки | нужны | не нужны для распаковки (нужны только для symlink и `.desktop`) |
+
+**Решение:** portable zip в `/home/user/mr/apps/Throne/`.
+
+Дополнительно:
+- добавили apt-task `unzip` перед распаковкой (нет в preseed `pkgsel/include`,
+  согласно CLAUDE.md §3 preseed заморожен — добавляем в ansible)
+- регекс `Throne-.*-linux-amd64\.zip$` чтобы не поймать `macos-*` / `windows-*`
+  assets с тем же префиксом
+- `owner: user` на `unarchive` + recursive `chown` после распаковки
+- `.desktop`-entry указывает на absolute path `/home/user/mr/apps/Throne/Throne`
+  (captive в home — если пользователь `user` не существует, пункт меню не
+  заработает, но для targeted single-user системы это ок)
+
+**Trade-off:** приложение живёт в `~/mr/apps/` и привязано к user `user` —
+это не multi-user schema. Для нашей системы (1 user, captive home) приемлемо.
 
 ## Ссылки
 
