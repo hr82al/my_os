@@ -75,6 +75,7 @@ wiki/
   - [⌨️ Keybindings cheatsheet](qtile/keybindings.md)
   - [⚙️ Настройка `config.py`](qtile/config.md)
   - [🧰 Essentials — rofi/picom/скриншоты/...](qtile/essentials.md)
+  - [🗺️ Roadmap XFCE4 → qtile](qtile/roadmap.md) — фазированный план привыкания
   - [📋 Decisions & Q&A](qtile/decisions.md)
 
 ## 📋 Decisions & Q&A — полный список
