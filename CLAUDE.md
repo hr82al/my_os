@@ -470,7 +470,61 @@ Error while resolving value for 'xxx_deb_url': No first item, sequence was empty
 | `Errno 101 Network is unreachable` | route / firewall | DNS работает, но route блокирован (DPI) |
 | `urlopen error _ssl.c:1012: handshake timed out` | TLS | DPI sniffs TLS, drops connections |
 | HTTP 403/404 от vendor CDN (не GitHub) | HTTP | URL-rot или геоблок API |
-| `Connection refused` | local | privoxy/throne не запущены
+| `Connection refused` | local | privoxy/throne не запущены |
+
+### 12. Electron `.deb` с GitHub releases — **обязательно** добавлять symlink в PATH
+
+⚠️ **Electron-based `.deb`** (Obsidian, Bruno, DbGate, Throne и т.п.) **НЕ создают**
+`/usr/bin/<name>` symlink при установке. Их postinst кладёт бинарь только в
+`/opt/AppName/<name>` и `.desktop`-entry. GUI запускается (меню/rofi → `.desktop`
+→ absolute path), но **в терминале команда не найдена**.
+
+Это отличается от Debian-policy пакетов (`apt install htop` → `/usr/bin/htop`) —
+для Electron-`.deb` это convention upstream-проектов, не баг.
+
+**Правило:** после каждой `apt: deb:` установки `.deb` из GitHub Releases —
+**обязательно** добавить `ansible.builtin.file: state: link`:
+
+```yaml
+- name: App | install
+  ansible.builtin.apt:
+    deb: /tmp/app.deb
+  tags: [app]
+
+- name: App | symlink to /usr/local/bin (для терминала)
+  ansible.builtin.file:
+    src: /opt/AppName/app-binary
+    dest: /usr/local/bin/app
+    state: link
+  tags: [app]
+```
+
+**Симптом проблемы:**
+```
+$ myapp
+bash: myapp: command not found
+```
+При этом запускается из меню / rofi.
+
+**Как найти правильный путь к бинарю:**
+```bash
+# На установленной системе:
+dpkg -L <package> | grep -E '^/opt/.+/[^/]+$' | xargs file | grep ELF
+# Или через find:
+find /opt/AppName -maxdepth 1 -type f -executable -not -name '*.so*'
+```
+
+**Приложения которые имеют правильный `/usr/bin/` сами:**
+- Native Debian пакеты (pgcli, libreoffice)
+- Apt-репо от vendor (VS Code → `/usr/bin/code`)
+- Go-based (chezmoi → `/usr/bin/chezmoi`)
+
+**Приложения требующие manual symlink:**
+- Electron + nwjs + similar frameworks (Obsidian, Bruno, DbGate, Throne, VS Code когда через .deb, …)
+- Tarball'ы в `/opt/` (Postman, Telegram) — мы уже добавляем symlink в pattern
+
+**При добавлении нового приложения:** после успешной установки прогнать
+`which <app>` в docker-test. Если пусто — добавить symlink task.
 
 Симптом в syslog который означает «late_command сломал installer»:
 ```

@@ -224,6 +224,41 @@ sudo grep -rl "packages.microsoft.com/repos/code" /etc/apt/
 sudo apt update
 ```
 
+## Q: Electron-apps из GitHub `.deb` — почему нужны symlinks?
+
+**Контекст:** после установки Obsidian/Bruno/DbGate/Throne из GitHub `.deb`,
+команда `obsidian` / `bruno` / etc. — `command not found`. GUI (из меню /
+rofi) работает.
+
+**Причина:** Electron-based `.deb` из GitHub Releases **по convention**
+кладут бинарь только в `/opt/AppName/<name>` и создают `.desktop`-entry.
+`/usr/bin/<name>` symlink — **не создают**. GUI запускается через
+`.desktop` Exec= с absolute path, но терминал без symlink не видит.
+
+Это отличается от Debian-policy пакетов (`htop`, `pgcli`, `chezmoi`,
+`code` от Microsoft apt-repo) которые сами кладут в `/usr/bin/`.
+
+**Решение:** после каждого `apt: deb:` из GitHub — дополнительный
+`ansible.builtin.file state: link` task:
+```yaml
+- ansible.builtin.file:
+    src: /opt/Throne/Throne
+    dest: /usr/local/bin/throne
+    state: link
+```
+
+**Список приложений где это применено:**
+- Throne → `/usr/local/bin/throne`
+- Obsidian → `/usr/local/bin/obsidian`
+- Bruno → `/usr/local/bin/bruno`
+- DbGate → `/usr/local/bin/dbgate`
+- (Postman, Telegram — tarball-установка, уже с symlinks)
+
+**Приложения где не нужно:**
+- `chezmoi`, `code` (VS Code), `pgcli`, `libreoffice` — сами создают `/usr/bin/`
+
+Правило в [CLAUDE.md §12](../../CLAUDE.md).
+
 ## Ссылки
 
 - [Ansible overview](README.md)
@@ -231,3 +266,4 @@ sudo apt update
 - [Bootstrap](../post-install/README.md) — как ansible запускается
 - [CLAUDE.md §1](../../CLAUDE.md) — правило экономии RAM
 - [CLAUDE.md §6](../../CLAUDE.md) — правило робастности late_command
+- [CLAUDE.md §12](../../CLAUDE.md) — symlinks для Electron `.deb`

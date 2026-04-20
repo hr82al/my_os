@@ -137,6 +137,13 @@
         deb: /tmp/dbgate.deb
       tags: [dbgate]
 
+    - name: DbGate | symlink to /usr/local/bin (для терминала)
+      ansible.builtin.file:
+        src: /opt/DbGate/dbgate
+        dest: /usr/local/bin/dbgate
+        state: link
+      tags: [dbgate]
+
     # -----------------------------------------------------------------------
     # Obsidian — latest .deb from GitHub releases
     # -----------------------------------------------------------------------
@@ -168,6 +175,13 @@
     - name: Obsidian | install
       ansible.builtin.apt:
         deb: /tmp/obsidian.deb
+      tags: [obsidian]
+
+    - name: Obsidian | symlink to /usr/local/bin (для терминала)
+      ansible.builtin.file:
+        src: /opt/Obsidian/obsidian
+        dest: /usr/local/bin/obsidian
+        state: link
       tags: [obsidian]
 
     # -----------------------------------------------------------------------
@@ -237,6 +251,13 @@
         deb: /tmp/bruno.deb
       tags: [bruno]
 
+    - name: Bruno | symlink to /usr/local/bin (для терминала)
+      ansible.builtin.file:
+        src: /opt/Bruno/bruno
+        dest: /usr/local/bin/bruno
+        state: link
+      tags: [bruno]
+
     # -----------------------------------------------------------------------
     # Throne — SOCKS5/VPN proxy client; .deb from GitHub releases
     # Provides the local SOCKS5 on 127.0.0.1:2080 which privoxy wraps.
@@ -269,6 +290,13 @@
     - name: Throne | install
       ansible.builtin.apt:
         deb: /tmp/throne.deb
+      tags: [throne]
+
+    - name: Throne | symlink to /usr/local/bin/throne (для терминала)
+      ansible.builtin.file:
+        src: /opt/Throne/Throne
+        dest: /usr/local/bin/throne
+        state: link
       tags: [throne]
 
     # -----------------------------------------------------------------------
